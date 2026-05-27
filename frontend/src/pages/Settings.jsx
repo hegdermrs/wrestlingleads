@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+import { API_URL, checkHealth, fetchJson, isLocalApi } from "../api.js";
 
 export default function Settings() {
   const [file, setFile] = useState(null);
@@ -13,15 +12,8 @@ export default function Settings() {
   const [metrics, setMetrics] = useState(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/health`)
-      .then((r) => r.json())
-      .then(setHealth)
-      .catch(() => setHealth({ status: "offline" }));
-
-    fetch(`${API_URL}/metrics`)
-      .then((r) => r.json())
-      .then(setMetrics)
-      .catch(() => setMetrics(null));
+    checkHealth().then(setHealth);
+    fetchJson("/metrics").then(setMetrics).catch(() => setMetrics(null));
   }, []);
 
   const handleScore = async () => {
@@ -110,6 +102,10 @@ export default function Settings() {
         </p>
         <div className="status-card inline-status">
           <span>API: {health?.status === "ok" ? "Online" : "Offline"}</span>
+          <span>URL: <code>{API_URL}</code></span>
+          {isLocalApi && !window.location.hostname.includes("localhost") && (
+            <span className="error-inline">VITE_API_URL not set — redeploy Netlify with Railway URL</span>
+          )}
           <span>Model: {health?.model_ready ? "Ready" : "Not trained"}</span>
           <span>Cache: {health?.cache_loaded ? "Loaded" : "Empty"}</span>
           <span>DeepSeek: {health?.llm_configured ? "Configured" : "Not set"}</span>

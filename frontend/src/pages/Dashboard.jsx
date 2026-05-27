@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+import { fetchJson } from "../api.js";
 
 const TIERS = ["All", "Hot", "Warm", "Cold", "Unqualified"];
 
@@ -21,11 +20,10 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [emptyCache, setEmptyCache] = useState(false);
 
   const loadStats = useCallback(async () => {
-    const res = await fetch(`${API_URL}/dashboard/stats`);
-    if (!res.ok) throw new Error("Failed to load stats");
-    return res.json();
+    return fetchJson("/dashboard/stats");
   }, []);
 
   const loadLeads = useCallback(async () => {
@@ -33,21 +31,29 @@ export default function Dashboard() {
     if (tier !== "All") params.set("tier", tier);
     if (search.trim()) params.set("search", search.trim());
 
-    const res = await fetch(`${API_URL}/dashboard/leads?${params}`);
-    if (res.status === 404) return { total: 0, leads: [] };
-    if (!res.ok) throw new Error("Failed to load leads");
-    return res.json();
+    try {
+      return await fetchJson(`/dashboard/leads?${params}`);
+    } catch (err) {
+      if (err.status === 404) {
+        setEmptyCache(true);
+        return { total: 0, leads: [] };
+      }
+      throw err;
+    }
   }, [page, tier, search]);
 
   const loadRecent = useCallback(async () => {
-    const res = await fetch(`${API_URL}/dashboard/recent?limit=5`);
-    if (!res.ok) return { recent: [] };
-    return res.json();
+    try {
+      return await fetchJson("/dashboard/recent?limit=5");
+    } catch {
+      return { recent: [] };
+    }
   }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError("");
+    setEmptyCache(false);
     try {
       const [statsData, leadsData, recentData] = await Promise.all([
         loadStats(),
@@ -58,6 +64,7 @@ export default function Dashboard() {
       setLeads(leadsData.leads || []);
       setTotal(leadsData.total || 0);
       setRecent(recentData.recent || []);
+      if (!statsData.loaded) setEmptyCache(true);
     } catch (err) {
       setError(err.message || "Failed to load dashboard");
     } finally {
@@ -70,19 +77,30 @@ export default function Dashboard() {
   }, [refresh]);
 
   const handleExport = async () => {
-    const params = tier !== "All" ? `?tier=${tier}` : "";
-    const res = await fetch(`${API_URL}/dashboard/export${params}`);
-    if (!res.ok) {
-      setError("Export failed");
-      return;
+    try {
+      const params = tier !== "All" ? `?tier=${tier}` : "";
+      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/dashboard/export${params}`);
+      if (!res.ok) {
+        const text = await res.text();
+        let detail = "Export failed";
+        try {
+          detail = JSON.parse(text).detail || detail;
+        } catch {
+          /* ignore */
+        }
+        setError(detail);
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `leads_${tier.toLowerCase()}_export.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || "Export failed");
     }
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `leads_${tier.toLowerCase()}_export.xlsx`;
-    link.click();
-    window.URL.revokeObjectURL(url);
   };
 
   const tierCounts = stats?.tier_counts || {};
@@ -92,6 +110,16 @@ export default function Dashboard() {
 
   return (
     <>
+      {emptyCache && !error && (
+        <section className="panel banner-warn">
+          <strong>No leads loaded on the server yet.</strong>
+          <p className="muted">
+            Go to <a href="/settings">Settings</a> and import your <code>qualified.xlsx</code> file
+            (fastest — no re-scoring), or upload and score a new export.
+          </p>
+        </section>
+      )}
+
       <section className="panel">
         <div className="panel-header">
           <div>

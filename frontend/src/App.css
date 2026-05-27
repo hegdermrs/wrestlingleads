@@ -136,6 +136,20 @@ button:disabled {
   color: #ff8f8f;
 }
 
+.error-inline {
+  color: #ff8f8f;
+  font-size: 0.9rem;
+}
+
+.banner-warn {
+  border-color: #ffc14f;
+  background: rgba(255, 193, 79, 0.08);
+}
+
+.banner-warn a {
+  color: #ffc14f;
+}
+
 .success {
   color: #7dffb2;
 }
