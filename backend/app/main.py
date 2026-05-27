@@ -1,0 +1,199 @@
+"""FastAPI application for lead qualification."""
+
+from __future__ import annotations
+
+import io
+import json
+import os
+from pathlib import Path
+
+import pandas as pd
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+
+from .config import DEFAULT_TRAINING_FILE, DEEPSEEK_API_KEY_ENV, METRICS_PATH, MODEL_PATH
+from .parser import load_leads_file
+from .scorer import metrics_summary, score_dataframe_async
+from .store import store
+from .train import train_model
+from .webhooks import router as webhooks_router
+
+load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
+app = FastAPI(title="Leads Qualifier API", version="1.0.0")
+app.include_router(webhooks_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("startup")
+def startup() -> None:
+    if not MODEL_PATH.exists() and DEFAULT_TRAINING_FILE.exists():
+        train_model()
+    store.load_on_startup()
+
+
+@app.get("/health")
+def health() -> dict:
+    return {
+        "status": "ok",
+        "model_ready": MODEL_PATH.exists(),
+        "training_data": DEFAULT_TRAINING_FILE.exists(),
+        "llm_provider": "deepseek",
+        "llm_configured": bool(os.getenv(DEEPSEEK_API_KEY_ENV)),
+        "cache_loaded": store.loaded,
+    }
+
+
+@app.get("/metrics")
+def get_metrics() -> dict:
+    if not METRICS_PATH.exists():
+        if DEFAULT_TRAINING_FILE.exists():
+            return train_model()
+        raise HTTPException(status_code=404, detail="No trained model metrics found.")
+    return json.loads(METRICS_PATH.read_text(encoding="utf-8"))
+
+
+@app.get("/dashboard/stats")
+def dashboard_stats() -> dict:
+    return store.get_stats()
+
+
+@app.get("/dashboard/leads")
+def dashboard_leads(
+    tier: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=200),
+    search: str | None = Query(default=None),
+) -> dict:
+    if not store.loaded:
+        raise HTTPException(status_code=404, detail="No scored leads loaded. Import or score leads in Settings.")
+    return store.get_leads(tier=tier, page=page, limit=limit, search=search)
+
+
+@app.get("/dashboard/export")
+def dashboard_export(tier: str | None = Query(default=None)) -> StreamingResponse:
+    if not store.loaded:
+        raise HTTPException(status_code=404, detail="No scored leads to export.")
+
+    try:
+        export_df = store.export_dataframe(tier=tier)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    buffer = io.BytesIO()
+    export_df.to_excel(buffer, index=False, engine="openpyxl")
+    buffer.seek(0)
+
+    suffix = "all" if not tier or tier.lower() == "all" else tier.lower()
+    filename = f"leads_{suffix}_qualified.xlsx"
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/dashboard/recent")
+def dashboard_recent(limit: int = Query(default=10, ge=1, le=50)) -> dict:
+    if not store.loaded:
+        return {"recent": []}
+    return {"recent": store.get_recent(limit=limit)}
+
+
+@app.post("/train")
+def retrain() -> dict:
+    if not DEFAULT_TRAINING_FILE.exists():
+        raise HTTPException(status_code=404, detail="Training data not found at data/leads.xlsx")
+    metrics = train_model()
+    return {"message": "Model retrained successfully", "metrics": metrics}
+
+
+@app.post("/score")
+async def score_upload(
+    file: UploadFile = File(...),
+    use_llm: bool = Query(default=True),
+) -> dict:
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file uploaded.")
+
+    try:
+        df = load_leads_file(content, filename=file.filename)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to parse file: {exc}") from exc
+
+    if df.empty:
+        raise HTTPException(status_code=400, detail="No lead rows found in file.")
+
+    scored = await score_dataframe_async(df, use_llm=use_llm)
+    store.save(scored, source=file.filename or "upload.xlsx", note="Scored via Settings")
+
+    return {
+        "message": "Leads scored and saved to dashboard cache",
+        "summary": metrics_summary(scored),
+        "row_count": len(scored),
+    }
+
+
+@app.post("/settings/import-qualified")
+async def import_qualified(file: UploadFile = File(...)) -> dict:
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file uploaded.")
+
+    try:
+        df = pd.read_excel(io.BytesIO(content), engine="openpyxl")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to parse file: {exc}") from exc
+
+    if "AI Tier" not in df.columns:
+        raise HTTPException(
+            status_code=400,
+            detail="File must be a pre-scored export with AI Tier column.",
+        )
+
+    store.save(df, source=file.filename or "qualified.xlsx", note="Imported pre-scored file")
+    return {
+        "message": "Qualified leads imported to dashboard cache",
+        "summary": metrics_summary(df),
+        "row_count": len(df),
+    }
+
+
+@app.post("/score/download")
+async def score_and_download(
+    file: UploadFile = File(...),
+    use_llm: bool = Query(default=True),
+) -> StreamingResponse:
+    """Legacy endpoint — prefer /dashboard/export after scoring once."""
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file uploaded.")
+
+    try:
+        df = load_leads_file(content, filename=file.filename)
+        scored = await score_dataframe_async(df, use_llm=use_llm)
+        store.save(scored, source=file.filename or "upload.xlsx", note="Scored via legacy download")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to score file: {exc}") from exc
+
+    buffer = io.BytesIO()
+    scored.to_excel(buffer, index=False, engine="openpyxl")
+    buffer.seek(0)
+
+    filename = Path(file.filename or "leads.xlsx").stem + "_qualified.xlsx"
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

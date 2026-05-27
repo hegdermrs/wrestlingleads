@@ -1,0 +1,29 @@
+{
+  "rows": 2144,
+  "positive_rate": 0.26072761194029853,
+  "accuracy": 0.675990675990676,
+  "precision": 0.4028776978417266,
+  "recall": 0.5,
+  "f1": 0.44621513944223107,
+  "roc_auc": 0.6529405137449301,
+  "hot_tier_precision": 0.4827586206896552,
+  "hot_tier_recall": 0.125,
+  "feature_columns": [
+    "Job Title",
+    "Job function",
+    "Investment Level",
+    "Relationship Status",
+    "Source",
+    "Sport",
+    "Wrestler's Grade",
+    "Years experience",
+    "Customer Type",
+    "State/Region",
+    "hubspot_10pt_normalized",
+    "deadline_urgency",
+    "has_email",
+    "has_phone",
+    "has_message",
+    "message_length"
+  ]
+}

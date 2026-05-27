@@ -1,0 +1,54 @@
+{
+  "contact_properties": {
+    "ai_score": {
+      "label": "AI Score",
+      "type": "number",
+      "description": "Blended qualification score 0-100"
+    },
+    "ai_tier": {
+      "label": "AI Tier",
+      "type": "enumeration",
+      "options": [
+        "Hot",
+        "Warm",
+        "Cold",
+        "Unqualified"
+      ],
+      "description": "Lead priority tier from AI qualifier"
+    },
+    "ai_reasons": {
+      "label": "AI Reasons",
+      "type": "string",
+      "description": "Why the lead received this score"
+    },
+    "recommended_action": {
+      "label": "Recommended Action",
+      "type": "string",
+      "description": "Suggested next step for sales"
+    },
+    "ml_score": {
+      "label": "ML Score",
+      "type": "number"
+    },
+    "llm_score": {
+      "label": "LLM Score",
+      "type": "number"
+    }
+  },
+  "source_to_hubspot_field_map": {
+    "AI Score": "ai_score",
+    "AI Tier": "ai_tier",
+    "AI Reasons": "ai_reasons",
+    "Recommended Action": "recommended_action",
+    "ML Score": "ml_score",
+    "LLM Score": "llm_score",
+    "First Name": "firstname",
+    "Last Name": "lastname",
+    "Email": "email",
+    "Phone Number": "phone",
+    "Message": "message",
+    "Job Title": "jobtitle",
+    "Lifecycle Stage": "lifecyclestage",
+    "Lead Status": "hs_lead_status"
+  }
+}

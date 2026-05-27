@@ -1,0 +1,284 @@
+"""Persistent cache of scored leads for dashboard and instant export."""
+
+from __future__ import annotations
+
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+
+from .config import BASE_DIR, DATA_DIR
+from .scorer import metrics_summary
+
+CACHE_PARQUET = DATA_DIR / "scored_cache.parquet"
+CACHE_META = DATA_DIR / "scored_cache_meta.json"
+QUALIFIED_FALLBACK = DATA_DIR / "qualified.xlsx"
+ROOT_QUALIFIED = BASE_DIR / "qualified.xlsx"
+
+DISPLAY_COLUMNS = [
+    "Record ID",
+    "First Name",
+    "Last Name",
+    "Email",
+    "Phone Number",
+    "Lifecycle Stage",
+    "Lead Status",
+    "Job Title",
+    "AI Score",
+    "AI Tier",
+    "ML Score",
+    "LLM Score",
+    "Recommended Action",
+    "AI Reasons",
+    "Source",
+    "Create Date",
+]
+
+
+def _safe_str(value: object) -> str:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    return str(value).strip()
+
+
+def _is_customer(row: pd.Series | dict[str, Any]) -> bool:
+    if isinstance(row, dict):
+        lifecycle = _safe_str(row.get("Lifecycle Stage", ""))
+    else:
+        lifecycle = _safe_str(row.get("Lifecycle Stage", ""))
+    return lifecycle == "Customer"
+
+
+class ScoredLeadsStore:
+    def __init__(self) -> None:
+        self._df: pd.DataFrame | None = None
+        self._meta: dict[str, Any] = {}
+
+    @property
+    def loaded(self) -> bool:
+        return self._df is not None and not self._df.empty
+
+    def load_on_startup(self) -> None:
+        if CACHE_PARQUET.exists():
+            self._df = pd.read_parquet(CACHE_PARQUET)
+            self._meta = self._read_meta()
+            return
+
+        for path in (QUALIFIED_FALLBACK, ROOT_QUALIFIED):
+            if path.exists() and self._load_qualified_file(path):
+                return
+
+    def _read_meta(self) -> dict[str, Any]:
+        if CACHE_META.exists():
+            return json.loads(CACHE_META.read_text(encoding="utf-8"))
+        return {}
+
+    def _write_meta(self) -> None:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        CACHE_META.write_text(json.dumps(self._meta, indent=2), encoding="utf-8")
+
+    def _persist(self) -> None:
+        assert self._df is not None
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        self._df.to_parquet(CACHE_PARQUET, index=False)
+        self._write_meta()
+
+    def _load_qualified_file(self, path: Path) -> bool:
+        try:
+            df = pd.read_excel(path, engine="openpyxl")
+        except Exception:
+            return False
+        if "AI Tier" not in df.columns:
+            return False
+        self.save(df, source=str(path.name), note="Loaded pre-scored qualified export")
+        return True
+
+    def _dashboard_df(self) -> pd.DataFrame:
+        """Leads shown on dashboard — excludes Customers (training data only)."""
+        if not self.loaded:
+            return pd.DataFrame()
+        assert self._df is not None
+        if "Lifecycle Stage" not in self._df.columns:
+            return self._df.copy()
+        mask = self._df["Lifecycle Stage"].astype(str).str.strip() != "Customer"
+        return self._df[mask].copy()
+
+    def _customer_count(self) -> int:
+        if not self.loaded or self._df is None or "Lifecycle Stage" not in self._df.columns:
+            return 0
+        return int((self._df["Lifecycle Stage"].astype(str).str.strip() == "Customer").sum())
+
+    def save(self, df: pd.DataFrame, source: str = "upload", note: str = "") -> None:
+        self._df = df.copy()
+        self._meta = {
+            "source": source,
+            "note": note,
+            "scored_at": datetime.now(UTC).isoformat(),
+            "row_count": len(df),
+            "customers_excluded_from_dashboard": self._customer_count(),
+        }
+        self._persist()
+
+    def _find_email_index(self, email: str) -> int | None:
+        if not self.loaded or not email:
+            return None
+        assert self._df is not None
+        if "Email" not in self._df.columns:
+            return None
+        normalized = email.strip().lower()
+        matches = self._df[
+            self._df["Email"].astype(str).str.strip().str.lower() == normalized
+        ]
+        if matches.empty:
+            return None
+        return int(matches.index[0])
+
+    def append_scored_row(self, row: pd.Series | dict[str, Any]) -> dict[str, Any]:
+        """Append or update a pre-scored lead in cache."""
+        if self._df is None:
+            self._df = pd.DataFrame()
+
+        series = pd.Series(row) if isinstance(row, dict) else row
+        email = _safe_str(series.get("Email", ""))
+
+        if email and len(self._df) > 0 and "Email" in self._df.columns:
+            existing_idx = self._find_email_index(email)
+            if existing_idx is not None:
+                for col, val in series.items():
+                    self._df.at[existing_idx, col] = val
+                action = "updated"
+                row_idx = existing_idx
+            else:
+                self._df = pd.concat([self._df, series.to_frame().T], ignore_index=True)
+                action = "created"
+                row_idx = len(self._df) - 1
+        else:
+            self._df = pd.concat([self._df, series.to_frame().T], ignore_index=True)
+            action = "created"
+            row_idx = len(self._df) - 1
+
+        self._meta["scored_at"] = datetime.now(UTC).isoformat()
+        self._meta["row_count"] = len(self._df)
+        self._meta["customers_excluded_from_dashboard"] = self._customer_count()
+        self._meta["last_append"] = datetime.now(UTC).isoformat()
+        self._persist()
+
+        result_row = self._df.iloc[row_idx]
+        return {
+            "action": action,
+            "row_index": int(row_idx),
+            "ai_score": float(result_row.get("AI Score", 0)),
+            "ai_tier": _safe_str(result_row.get("AI Tier", "")),
+            "email": email,
+            "on_dashboard": not _is_customer(result_row),
+        }
+
+    async def append_lead(self, row: dict[str, Any], use_llm: bool = True) -> dict[str, Any]:
+        """Score a single lead and append to cache."""
+        from .scorer import score_dataframe_async
+
+        df = pd.DataFrame([row])
+        scored = await score_dataframe_async(df, use_llm=use_llm)
+        if "Source" not in scored.columns or not _safe_str(scored.iloc[0].get("Source", "")):
+            scored.at[scored.index[0], "Source"] = row.get("Source", "Wufoo")
+        if "Create Date" not in scored.columns or not _safe_str(scored.iloc[0].get("Create Date", "")):
+            scored.at[scored.index[0], "Create Date"] = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
+
+        return self.append_scored_row(scored.iloc[0])
+
+    def get_stats(self) -> dict[str, Any]:
+        if not self.loaded:
+            return {
+                "loaded": False,
+                "total_leads": 0,
+                "tier_counts": {},
+                "average_score": 0,
+                "customers_excluded": 0,
+                "meta": self._meta,
+            }
+
+        dashboard = self._dashboard_df()
+        summary = metrics_summary(dashboard)
+        tier_stats: dict[str, Any] = {}
+        for tier in ["Hot", "Warm", "Cold", "Unqualified"]:
+            subset = dashboard[dashboard["AI Tier"].astype(str).str.strip() == tier]
+            if subset.empty:
+                continue
+            tier_stats[tier] = {
+                "count": int(len(subset)),
+                "avg_ai_score": round(float(subset["AI Score"].mean()), 1),
+                "avg_ml_score": round(float(subset["ML Score"].mean()), 1)
+                if "ML Score" in subset
+                else None,
+                "avg_llm_score": round(float(subset["LLM Score"].mean()), 1)
+                if "LLM Score" in subset
+                else None,
+            }
+
+        return {
+            "loaded": True,
+            "total_leads": summary["total_leads"],
+            "tier_counts": summary["tier_counts"],
+            "average_score": summary["average_score"],
+            "tier_stats": tier_stats,
+            "customers_excluded": self._customer_count(),
+            "meta": self._meta,
+        }
+
+    def get_leads(
+        self,
+        tier: str | None = None,
+        page: int = 1,
+        limit: int = 50,
+        search: str | None = None,
+    ) -> dict[str, Any]:
+        if not self.loaded:
+            return {"total": 0, "page": page, "limit": limit, "leads": []}
+
+        filtered = self._dashboard_df()
+
+        if tier and tier.lower() != "all":
+            filtered = filtered[filtered["AI Tier"].astype(str).str.strip() == tier]
+
+        if search:
+            q = search.lower().strip()
+            mask = pd.Series(False, index=filtered.index)
+            for col in ["First Name", "Last Name", "Email", "AI Reasons", "Job Title"]:
+                if col in filtered.columns:
+                    mask |= filtered[col].astype(str).str.lower().str.contains(q, na=False)
+            filtered = filtered[mask]
+
+        total = len(filtered)
+        start = max(0, (page - 1) * limit)
+        page_df = filtered.iloc[start : start + limit]
+
+        cols = [c for c in DISPLAY_COLUMNS if c in page_df.columns]
+        leads = page_df[cols].fillna("").to_dict(orient="records")
+
+        return {"total": total, "page": page, "limit": limit, "leads": leads}
+
+    def get_recent(self, limit: int = 10) -> list[dict[str, Any]]:
+        if not self.loaded:
+            return []
+
+        dashboard = self._dashboard_df()
+        if dashboard.empty:
+            return []
+
+        recent = dashboard.tail(limit).iloc[::-1]
+        cols = [c for c in DISPLAY_COLUMNS if c in recent.columns]
+        return recent[cols].fillna("").to_dict(orient="records")
+
+    def export_dataframe(self, tier: str | None = None) -> pd.DataFrame:
+        if not self.loaded:
+            raise ValueError("No scored leads in cache.")
+
+        export_df = self._dashboard_df()
+        if tier and tier.lower() != "all":
+            export_df = export_df[export_df["AI Tier"].astype(str).str.strip() == tier]
+        return export_df.copy()
+
+
+store = ScoredLeadsStore()

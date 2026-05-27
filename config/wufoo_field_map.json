@@ -1,0 +1,40 @@
+{
+  "instructions": "In Wufoo: open your form → Fields → note each field's API ID (Field1, Field2, ...). Replace the keys below with your actual IDs.",
+  "webhook_url": "https://YOUR-RAILWAY-URL/webhooks/wufoo",
+  "webhook_header": {
+    "name": "X-Wufoo-Webhook-Secret",
+    "value": "match WUFOO_WEBHOOK_SECRET in .env"
+  },
+  "wufoo_to_qualifier_map": {
+    "Field1": "First Name",
+    "Field2": "Last Name",
+    "Field3": "Email",
+    "Field4": "Phone Number",
+    "Field5": "Message",
+    "Field6": "Job Title",
+    "Field7": "Job function",
+    "Field8": "Relationship Status",
+    "Field9": "Investment Level",
+    "Field10": "Years experience",
+    "Field11": "Wrestler's Grade",
+    "Field12": "Wrestler's Goal",
+    "Field13": "Deadline for Goal",
+    "Field14": "State/Region"
+  },
+  "qualifier_to_hubspot_map": {
+    "AI Score": "ai_score",
+    "AI Tier": "ai_tier",
+    "AI Reasons": "ai_reasons",
+    "Recommended Action": "recommended_action",
+    "ML Score": "ml_score",
+    "LLM Score": "llm_score",
+    "First Name": "firstname",
+    "Last Name": "lastname",
+    "Email": "email",
+    "Phone Number": "phone",
+    "Message": "message",
+    "Job Title": "jobtitle",
+    "Lifecycle Stage": "lifecyclestage",
+    "Lead Status": "hs_lead_status"
+  }
+}

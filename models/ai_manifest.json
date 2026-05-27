@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-05-27T16:18:46.098939+00:00",
+  "qualified_rows": 2144,
+  "artifacts": {
+    "qualified_data": "data\\qualified.xlsx",
+    "ml_model": "models\\lead_classifier.joblib",
+    "few_shot_examples": "models\\few_shot_examples.json",
+    "metrics": "models\\metrics.json",
+    "scoring_config": "models/scoring_config.json",
+    "tier_calibration": "models/tier_calibration.json",
+    "hubspot_config": "config/hubspot_field_map.json",
+    "wufoo_config": "config/wufoo_field_map.json"
+  },
+  "tier_counts": {
+    "Warm": 875,
+    "Cold": 604,
+    "Hot": 403,
+    "Unqualified": 262
+  },
+  "few_shot_count": 8,
+  "model_metrics": {
+    "rows": 2144,
+    "positive_rate": 0.26072761194029853,
+    "accuracy": 0.675990675990676,
+    "precision": 0.4028776978417266,
+    "recall": 0.5,
+    "f1": 0.44621513944223107,
+    "roc_auc": 0.6529405137449301,
+    "hot_tier_precision": 0.4827586206896552,
+    "hot_tier_recall": 0.125,
+    "feature_columns": [
+      "Job Title",
+      "Job function",
+      "Investment Level",
+      "Relationship Status",
+      "Source",
+      "Sport",
+      "Wrestler's Grade",
+      "Years experience",
+      "Customer Type",
+      "State/Region",
+      "hubspot_10pt_normalized",
+      "deadline_urgency",
+      "has_email",
+      "has_phone",
+      "has_message",
+      "message_length"
+    ]
+  }
+}

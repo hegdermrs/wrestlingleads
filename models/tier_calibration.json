@@ -1,0 +1,72 @@
+{
+  "Hot": {
+    "count": 403,
+    "avg_ai_score": 92.3,
+    "avg_ml_score": 67.0,
+    "avg_llm_score": 78.7,
+    "top_job_titles": {
+      "Parent Seeking 1-1 Coaching for Child": 300,
+      "Wrestler Seeking 1-1 Coaching for Myself": 61,
+      "Coach Seeking Team Mindset Training": 10
+    },
+    "top_lifecycle": {
+      "Customer": 249,
+      "Subscriber": 79,
+      "Lead": 59,
+      "Opportunity": 16
+    }
+  },
+  "Warm": {
+    "count": 875,
+    "avg_ai_score": 61.6,
+    "avg_ml_score": 42.6,
+    "avg_llm_score": 81.0,
+    "top_job_titles": {
+      "Parent Seeking 1-1 Coaching for Child": 481,
+      "Wrestler Seeking 1-1 Coaching for Myself": 352,
+      "Coach Seeking Team Mindset Training": 16,
+      "Parent": 3,
+      "Wrestler": 3
+    },
+    "top_lifecycle": {
+      "Lead": 570,
+      "Opportunity": 154,
+      "Subscriber": 151
+    }
+  },
+  "Cold": {
+    "count": 604,
+    "avg_ai_score": 39.4,
+    "avg_ml_score": 33.2,
+    "avg_llm_score": 41.7,
+    "top_job_titles": {
+      "Wrestler Seeking 1-1 Coaching for Myself": 214,
+      "Parent Seeking 1-1 Coaching for Child": 211,
+      "Coach Seeking Team Mindset Training": 115,
+      "Wrestler": 1
+    },
+    "top_lifecycle": {
+      "Lead": 414,
+      "Subscriber": 121,
+      "Opportunity": 69
+    }
+  },
+  "Unqualified": {
+    "count": 262,
+    "avg_ai_score": 17.5,
+    "avg_ml_score": 21.5,
+    "avg_llm_score": 6.1,
+    "top_job_titles": {
+      "Wrestler Seeking 1-1 Coaching for Myself": 31,
+      "Coach Seeking Team Mindset Training": 27,
+      "Parent Seeking 1-1 Coaching for Child": 14,
+      "Wrestler": 3,
+      "HC Clyde HS Girls": 1
+    },
+    "top_lifecycle": {
+      "Lead": 230,
+      "Opportunity": 21,
+      "Subscriber": 10
+    }
+  }
+}

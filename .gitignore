@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+node_modules/
+frontend/dist/
+
+# Runtime cache (rebuilt on deploy)
+data/scored_cache.parquet
+data/scored_cache_meta.json
+
+# CRM exports contain PII — import via Settings after deploy
+leads.xlsx
+qualified.xlsx
+data/*.xlsx
+
+# Large model binary (retrained on startup if missing)
+models/*.joblib
+
+# Temp / local
+_leads_analysis_out.txt
+_analyze_leads.py
+*.qualified.xlsx
+.cursor/
+assets/
