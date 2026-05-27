@@ -12,10 +12,12 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend ./backend
 COPY data ./data
 COPY models ./models
+COPY start.sh ./start.sh
+RUN chmod +x ./start.sh
 
 ENV PYTHONPATH=/app/backend
 ENV PORT=8000
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "/app/backend"]
+CMD ["./start.sh"]
