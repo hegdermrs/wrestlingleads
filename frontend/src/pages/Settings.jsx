@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_URL, checkHealth, fetchJson, isLocalApi } from "../api.js";
+import { API_URL, checkHealth, fetchJson, uploadFile } from "../api.js";
 
 export default function Settings() {
   const [file, setFile] = useState(null);
@@ -25,20 +25,10 @@ export default function Settings() {
     setError("");
     setMessage("");
 
-    const form = new FormData();
-    form.append("file", file);
-
     try {
-      const response = await fetch(`${API_URL}/score?use_llm=${useLlm}`, {
-        method: "POST",
-        body: form,
-      });
-      if (!response.ok) {
-        const detail = await response.json();
-        throw new Error(detail.detail || "Scoring failed");
-      }
-      const data = await response.json();
+      const data = await uploadFile("/score", file, { use_llm: String(useLlm) });
       setMessage(`Scored ${data.row_count} leads. Open Dashboard to view and export instantly.`);
+      checkHealth().then(setHealth);
     } catch (err) {
       setError(err.message || "Something went wrong");
     } finally {
@@ -55,20 +45,10 @@ export default function Settings() {
     setError("");
     setMessage("");
 
-    const form = new FormData();
-    form.append("file", qualifiedFile);
-
     try {
-      const response = await fetch(`${API_URL}/settings/import-qualified`, {
-        method: "POST",
-        body: form,
-      });
-      if (!response.ok) {
-        const detail = await response.json();
-        throw new Error(detail.detail || "Import failed");
-      }
-      const data = await response.json();
+      const data = await uploadFile("/settings/import-qualified", qualifiedFile);
       setMessage(`Imported ${data.row_count} pre-scored leads to dashboard cache.`);
+      checkHealth().then(setHealth);
     } catch (err) {
       setError(err.message || "Import failed");
     } finally {
@@ -103,8 +83,8 @@ export default function Settings() {
         <div className="status-card inline-status">
           <span>API: {health?.status === "ok" ? "Online" : "Offline"}</span>
           <span>URL: <code>{API_URL}</code></span>
-          {isLocalApi && !window.location.hostname.includes("localhost") && (
-            <span className="error-inline">VITE_API_URL not set — redeploy Netlify with Railway URL</span>
+          {API_URL.includes("localhost") && !window.location.hostname.includes("localhost") && (
+            <span className="error-inline">Still using localhost — redeploy Netlify or wait for /api proxy build</span>
           )}
           <span>Model: {health?.model_ready ? "Ready" : "Not trained"}</span>
           <span>Cache: {health?.cache_loaded ? "Loaded" : "Empty"}</span>

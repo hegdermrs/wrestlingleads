@@ -1,6 +1,17 @@
-export const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+export function resolveApiUrl() {
+  const envUrl = import.meta.env.VITE_API_URL?.trim();
+  if (envUrl) return envUrl.replace(/\/$/, "");
+  if (import.meta.env.DEV) return "http://localhost:8000";
+  // Production on Netlify: /api/* is proxied to Railway in netlify.toml
+  return "/api";
+}
 
-export const isLocalApi = API_URL.includes("localhost") || API_URL.includes("127.0.0.1");
+export const API_URL = resolveApiUrl();
+
+export const isLocalApi =
+  API_URL.includes("localhost") ||
+  API_URL.includes("127.0.0.1") ||
+  API_URL === "/api";
 
 export async function fetchJson(path, options = {}) {
   const url = `${API_URL}${path}`;
@@ -12,18 +23,21 @@ export async function fetchJson(path, options = {}) {
     try {
       data = JSON.parse(text);
     } catch {
-      const hint = isLocalApi
-        ? "VITE_API_URL is still localhost. On Netlify, set it to your Railway URL and redeploy."
-        : "Check that your Railway backend is running and VITE_API_URL matches its public URL.";
-      throw new Error(`Cannot reach API at ${API_URL}. ${hint}`);
+      throw new Error(
+        `Cannot reach API at ${url}. Check Railway is running and Netlify /api proxy is configured.`
+      );
     }
   }
 
   if (!res.ok) {
     const detail = data?.detail;
-    const err = new Error(
-      typeof detail === "string" ? detail : `Request failed (${res.status})`
-    );
+    const message =
+      typeof detail === "string"
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((d) => d.msg).join(", ")
+          : `Request failed (${res.status}) at ${url}`;
+    const err = new Error(message);
     err.status = res.status;
     throw err;
   }
@@ -37,4 +51,25 @@ export async function checkHealth() {
   } catch {
     return { status: "offline" };
   }
+}
+
+export async function uploadFile(path, file, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  const url = `${API_URL}${path}${qs ? `?${qs}` : ""}`;
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(url, { method: "POST", body: form });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(`Upload failed — non-JSON response from ${url}`);
+  }
+  if (!res.ok) {
+    throw new Error(
+      typeof data?.detail === "string" ? data.detail : `Upload failed (${res.status})`
+    );
+  }
+  return data;
 }

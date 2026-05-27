@@ -2,6 +2,13 @@
   command = "npm run build"
   publish = "dist"
 
+# Proxy API calls to Railway (must come BEFORE SPA fallback)
+[[redirects]]
+  from = "/api/*"
+  to = "https://wrestlingleads-production.up.railway.app/:splat"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
