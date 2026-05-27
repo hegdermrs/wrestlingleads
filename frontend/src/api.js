@@ -1,6 +1,10 @@
 export function resolveApiUrl() {
-  const envUrl = import.meta.env.VITE_API_URL?.trim();
-  if (envUrl) return envUrl.replace(/\/$/, "");
+  let url = import.meta.env.VITE_API_URL?.trim();
+  if (url) {
+    // Common mistake: pasting the /health test URL instead of the API base URL
+    url = url.replace(/\/health\/?$/i, "");
+    return url.replace(/\/$/, "");
+  }
   if (import.meta.env.DEV) return "http://localhost:8000";
   // Production on Netlify: /api/* is proxied to Railway in netlify.toml
   return "/api";
