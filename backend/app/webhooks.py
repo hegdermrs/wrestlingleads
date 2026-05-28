@@ -60,7 +60,17 @@ async def wufoo_webhook(request: Request, use_llm: bool = True) -> dict[str, Any
 
     row = wufoo_payload_to_lead_row(payload)
     if not row.get("Email") and not row.get("Message"):
-        raise HTTPException(status_code=400, detail="Webhook missing mappable lead fields. Check wufoo_field_map.json.")
+        from .integrations.wufoo import WOOFOO_MAP_PATH, load_wufoo_map
+
+        if not load_wufoo_map():
+            raise HTTPException(
+                status_code=500,
+                detail=f"Wufoo field map missing on server ({WOOFOO_MAP_PATH}). Redeploy latest Docker image.",
+            )
+        raise HTTPException(
+            status_code=400,
+            detail="Webhook missing mappable lead fields. Check wufoo_field_map.json.",
+        )
 
     result = await store.append_lead(row, use_llm=use_llm)
 

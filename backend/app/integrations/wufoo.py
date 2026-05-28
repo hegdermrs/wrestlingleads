@@ -17,6 +17,18 @@ def load_wufoo_map() -> dict[str, str]:
     return dict(data.get("wufoo_to_qualifier_map", {}))
 
 
+def _field_key(field_id: object) -> str:
+    """Normalize Wufoo field IDs to FieldN keys used in webhooks."""
+    raw = str(field_id).strip()
+    if not raw:
+        return ""
+    if raw.startswith("Field"):
+        return raw
+    if raw.isdigit():
+        return f"Field{raw}"
+    return raw
+
+
 def _normalize_fields_dict(raw: dict[str, Any]) -> dict[str, Any]:
     """Flatten Wufoo Fields array format to FieldN keys."""
     flat: dict[str, Any] = dict(raw)
@@ -29,6 +41,7 @@ def _normalize_fields_dict(raw: dict[str, Any]) -> dict[str, Any]:
             field_id = item.get("ID") or item.get("Id") or item.get("id")
             value = item.get("Value") or item.get("value")
             if field_id:
+                flat[_field_key(field_id)] = value
                 flat[str(field_id)] = value
             name = item.get("Name") or item.get("name")
             if name and value is not None:
