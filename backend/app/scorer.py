@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -23,6 +23,7 @@ from .features import (
     is_sparse_subscriber,
 )
 from .llm import score_leads_with_llm_async
+from .progress import ProgressCallback, emit_progress
 from .train import load_model, predict_ml_scores
 
 
@@ -134,14 +135,31 @@ async def score_dataframe_async(
     df: pd.DataFrame,
     use_llm: bool = True,
     max_llm_rows: int | None = None,
+    on_progress: ProgressCallback | None = None,
 ) -> pd.DataFrame:
     """Score all leads and return enriched DataFrame."""
     if df.empty:
         return df.copy()
 
+    total = len(df)
+
+    emit_progress(on_progress, "ml", "Running ML model", 0, 1, use_llm)
     model = load_model()
     _, ml_scores = predict_ml_scores(df, model=model)
-    llm_results = await score_leads_with_llm_async(df, use_llm=use_llm, max_rows=max_llm_rows)
+    emit_progress(on_progress, "ml", "ML model complete", 1, 1, use_llm)
+
+    llm_label = "DeepSeek text scoring" if use_llm else "Heuristic text scoring"
+    emit_progress(on_progress, "llm", llm_label, 0, total, use_llm)
+
+    def llm_row_progress(done: int, llm_total: int) -> None:
+        emit_progress(on_progress, "llm", llm_label, done, llm_total, use_llm)
+
+    llm_results = await score_leads_with_llm_async(
+        df,
+        use_llm=use_llm,
+        max_rows=max_llm_rows,
+        on_row_complete=llm_row_progress,
+    )
 
     enriched = df.copy()
     ai_scores: list[float] = []
@@ -151,6 +169,8 @@ async def score_dataframe_async(
     ml_cols: list[float] = []
     llm_cols: list[float] = []
     rule_cols: list[float] = []
+
+    emit_progress(on_progress, "blending", "Blending scores", 0, total, use_llm)
 
     for idx, (_, row) in enumerate(df.iterrows()):
         lifecycle = _safe_str(row.get("Lifecycle Stage", ""))
@@ -211,6 +231,9 @@ async def score_dataframe_async(
         ml_cols.append(round(float(ml_scores[idx]), 1))
         llm_cols.append(round(float(llm["score"]), 1))
         rule_cols.append(round(float(rule_score), 1))
+
+        if (idx + 1) % 25 == 0 or idx + 1 == total:
+            emit_progress(on_progress, "blending", "Blending scores", idx + 1, total, use_llm)
 
     enriched["AI Score"] = ai_scores
     enriched["AI Tier"] = ai_tiers

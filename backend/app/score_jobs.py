@@ -9,13 +9,20 @@ from uuid import uuid4
 _jobs: dict[str, dict[str, Any]] = {}
 
 
-def create_job(row_count: int, source: str) -> str:
+def create_job(row_count: int, source: str, use_llm: bool = True) -> str:
     job_id = str(uuid4())
     _jobs[job_id] = {
         "job_id": job_id,
         "status": "queued",
         "row_count": row_count,
         "source": source,
+        "use_llm": use_llm,
+        "phase": "queued",
+        "phase_label": "Queued",
+        "processed": 0,
+        "total": row_count,
+        "percent": 0,
+        "progress_message": "Waiting to start…",
         "started_at": datetime.now(UTC).isoformat(),
     }
     return job_id

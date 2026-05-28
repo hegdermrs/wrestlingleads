@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ScoreProgress from "../components/ScoreProgress.jsx";
 import { API_URL, checkHealth, fetchJson, isCrossOriginApi, uploadFile, uploadScoreFile } from "../api.js";
 
 export default function Settings() {
@@ -10,6 +11,7 @@ export default function Settings() {
   const [message, setMessage] = useState("");
   const [health, setHealth] = useState(null);
   const [metrics, setMetrics] = useState(null);
+  const [scoreProgress, setScoreProgress] = useState(null);
 
   useEffect(() => {
     checkHealth().then(setHealth);
@@ -24,14 +26,23 @@ export default function Settings() {
     setLoading(true);
     setError("");
     setMessage("");
+    setScoreProgress(null);
 
     try {
-      const data = await uploadScoreFile(file, useLlm, (progress) => setMessage(progress));
+      const data = await uploadScoreFile(file, useLlm, setScoreProgress);
       const count = data.row_count ?? data.summary?.total_leads ?? "?";
+      setScoreProgress((prev) => ({
+        ...prev,
+        status: "complete",
+        percent: 100,
+        phase_label: "Complete",
+        progress_message: `Done — ${count} leads scored`,
+      }));
       setMessage(`Scored ${count} leads. Open Dashboard to view and export instantly.`);
       checkHealth().then(setHealth);
     } catch (err) {
       setError(err.message || "Something went wrong");
+      setScoreProgress(null);
     } finally {
       setLoading(false);
     }
@@ -132,12 +143,13 @@ export default function Settings() {
           </label>
           <div className="button-row">
             <button onClick={handleScore} disabled={loading || !file}>
-              {loading ? "Working..." : "Score & Save to Dashboard"}
+              {loading ? "Scoring…" : "Score & Save to Dashboard"}
             </button>
             <button className="secondary" onClick={handleRetrain} disabled={loading}>
               Retrain Model
             </button>
           </div>
+          <ScoreProgress progress={scoreProgress} />
         </div>
       </section>
 

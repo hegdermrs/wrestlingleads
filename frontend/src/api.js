@@ -119,23 +119,26 @@ export async function uploadScoreFile(file, useLlm, onProgress) {
     return data;
   }
 
-  const rowCount = data.row_count ?? 0;
-  onProgress?.(`Scoring ${rowCount} leads… started`);
+  onProgress?.({
+    status: "running",
+    phase: "starting",
+    phase_label: "Starting",
+    processed: 0,
+    total: data.row_count ?? 0,
+    percent: 0,
+    progress_message: "Upload complete — starting score job…",
+  });
 
   for (let attempt = 0; attempt < 400; attempt += 1) {
-    await sleep(3000);
+    await sleep(1500);
     const job = await fetchJson(`/score/status/${data.job_id}`);
-    const minutes = Math.floor(((attempt + 1) * 3) / 60);
+    onProgress?.(job);
 
-    if (job.status === "running" || job.status === "queued") {
-      onProgress?.(`Scoring ${rowCount} leads… ~${minutes} min (keep tab open)`);
-      continue;
-    }
     if (job.status === "complete") {
       return job;
     }
     if (job.status === "failed") {
-      throw new Error(job.detail || "Scoring failed on server");
+      throw new Error(job.detail || job.progress_message || "Scoring failed on server");
     }
   }
 

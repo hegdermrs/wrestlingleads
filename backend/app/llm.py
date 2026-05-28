@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 
@@ -19,6 +19,8 @@ from .config import (
     FEW_SHOT_PATH,
 )
 from .features import build_text_bundle, empty_profile_text_result, heuristic_text_score
+
+ProgressCallback = Callable[[int, int], None] | None
 
 SYSTEM_PROMPT = """You are a lead qualification expert for a 1-on-1 mental performance coaching program for wrestlers.
 
@@ -185,24 +187,40 @@ async def score_leads_with_llm_async(
     df: pd.DataFrame,
     use_llm: bool = True,
     max_rows: int | None = None,
+    on_row_complete: ProgressCallback = None,
 ) -> list[dict[str, Any]]:
     """Score leads in parallel with DeepSeek (async)."""
     subset = df.head(max_rows) if max_rows else df
     rows = [row for _, row in subset.iterrows()]
+    total = len(rows)
 
     client = create_async_llm_client() if use_llm else None
     if client is None:
-        return [_heuristic_result(row) for row in rows]
+        results = [_heuristic_result(row) for row in rows]
+        if on_row_complete and total:
+            on_row_complete(total, total)
+        return results
 
     few_shot = _load_few_shot_examples()
     model = os.getenv("DEEPSEEK_MODEL", DEEPSEEK_MODEL)
     semaphore = asyncio.Semaphore(_max_concurrency())
 
-    tasks = [
-        _score_lead_with_llm_async(row, client, semaphore, few_shot, model)
-        for row in rows
-    ]
-    return list(await asyncio.gather(*tasks))
+    async def score_indexed(idx: int, row: pd.Series) -> tuple[int, dict[str, Any]]:
+        result = await _score_lead_with_llm_async(row, client, semaphore, few_shot, model)
+        return idx, result
+
+    tasks = [asyncio.create_task(score_indexed(i, row)) for i, row in enumerate(rows)]
+    results: list[dict[str, Any] | None] = [None] * total
+    completed = 0
+
+    for task in asyncio.as_completed(tasks):
+        idx, result = await task
+        results[idx] = result
+        completed += 1
+        if on_row_complete:
+            on_row_complete(completed, total)
+
+    return [r if r is not None else _heuristic_result(rows[i]) for i, r in enumerate(results)]
 
 
 def score_leads_with_llm(

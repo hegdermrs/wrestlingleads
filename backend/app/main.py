@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from .config import DEFAULT_TRAINING_FILE, DEEPSEEK_API_KEY_ENV, METRICS_PATH, MODEL_PATH
 from .parser import load_leads_file
+from .progress import emit_progress
 from .score_jobs import create_job, get_job, update_job
 from .scorer import metrics_summary, score_dataframe_async
 from .store import store
@@ -136,19 +137,38 @@ def retrain() -> dict:
 
 
 async def _run_score_job(job_id: str, df: pd.DataFrame, use_llm: bool, filename: str) -> None:
-    update_job(job_id, status="running")
+    row_count = len(df)
+
+    def on_progress(data: dict) -> None:
+        update_job(job_id, status="running", **data)
+
+    update_job(job_id, status="running", phase="starting", phase_label="Starting", percent=0)
     try:
-        scored = await score_dataframe_async(df, use_llm=use_llm)
+        scored = await score_dataframe_async(df, use_llm=use_llm, on_progress=on_progress)
+        emit_progress(on_progress, "saving", "Saving to dashboard", 1, 1, use_llm)
         store.save(scored, source=filename or "upload.xlsx", note="Scored via Settings")
         update_job(
             job_id,
             status="complete",
+            phase="complete",
+            phase_label="Complete",
+            processed=row_count,
+            total=row_count,
+            percent=100,
+            progress_message=f"Done — {row_count:,} leads scored",
             summary=metrics_summary(scored),
-            row_count=len(scored),
+            row_count=row_count,
             finished_at=datetime.now(UTC).isoformat(),
         )
     except Exception as exc:
-        update_job(job_id, status="failed", detail=str(exc))
+        update_job(
+            job_id,
+            status="failed",
+            phase="failed",
+            phase_label="Failed",
+            progress_message=str(exc),
+            detail=str(exc),
+        )
 
 
 @app.get("/score/status/{job_id}")
@@ -181,7 +201,7 @@ async def score_upload(
     filename = file.filename or "upload.xlsx"
 
     if async_mode:
-        job_id = create_job(len(df), filename)
+        job_id = create_job(len(df), filename, use_llm=use_llm)
         background_tasks.add_task(_run_score_job, job_id, df, use_llm, filename)
         return {
             "message": "Scoring started — poll status or refresh Dashboard when complete",
