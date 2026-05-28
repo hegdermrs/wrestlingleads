@@ -13,7 +13,7 @@ from .store import store
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
-def _verify_wufoo_secret(request: Request) -> None:
+def _verify_wufoo_secret(request: Request, payload: dict[str, Any] | None = None) -> None:
     secret = os.getenv("WUFOO_WEBHOOK_SECRET")
     if not secret:
         return
@@ -23,6 +23,9 @@ def _verify_wufoo_secret(request: Request) -> None:
         or request.headers.get("Authorization")
         or request.query_params.get("secret")
     )
+    if payload:
+        provided = provided or payload.get("HandshakeKey") or payload.get("handshakeKey")
+
     if provided != secret:
         raise HTTPException(status_code=401, detail="Invalid Wufoo webhook secret.")
 
@@ -44,16 +47,16 @@ async def wufoo_webhook(request: Request, use_llm: bool = True) -> dict[str, Any
     """
     Receive a Wufoo form submission, score it, and append to dashboard cache.
 
-    Configure in Wufoo: Form → Notifications → Webhooks
+    Configure in Wufoo: Form → More → Integrations → WebHook (paid plans only)
     URL: https://your-api/webhooks/wufoo
-    Optional header: X-Wufoo-Webhook-Secret (match WUFOO_WEBHOOK_SECRET in .env)
+    Handshake Key: match WUFOO_WEBHOOK_SECRET in Railway/.env
     """
-    _verify_wufoo_secret(request)
-
     try:
         payload = await _parse_wufoo_body(request)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid webhook payload: {exc}") from exc
+
+    _verify_wufoo_secret(request, payload)
 
     row = wufoo_payload_to_lead_row(payload)
     if not row.get("Email") and not row.get("Message"):
