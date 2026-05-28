@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from .config import DEFAULT_TRAINING_FILE, DEEPSEEK_API_KEY_ENV, METRICS_PATH, MODEL_PATH
 from .parser import load_leads_file
 from .progress import emit_progress
-from .score_jobs import create_job, get_job, update_job
+from .score_jobs import create_job, get_job, list_jobs, update_job
 from .scorer import metrics_summary, score_dataframe_async
 from .store import store
 from .train import train_model
@@ -177,6 +177,14 @@ def score_job_status(job_id: str) -> dict:
     if not job:
         raise HTTPException(status_code=404, detail="Score job not found.")
     return job
+
+
+@app.get("/score/latest")
+def latest_score_job() -> dict:
+    jobs = list_jobs(limit=1)
+    if not jobs:
+        raise HTTPException(status_code=404, detail="No score jobs found.")
+    return jobs[0]
 
 
 @app.post("/score")

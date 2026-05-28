@@ -108,6 +108,32 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function fetchJsonRetry(path, retries = 5) {
+  let lastError;
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    try {
+      return await fetchJson(path);
+    } catch (err) {
+      lastError = err;
+      if (err.status && err.status !== 404) {
+        throw err;
+      }
+      if (attempt < retries - 1) {
+        await sleep(800 * (attempt + 1));
+      }
+    }
+  }
+  throw lastError;
+}
+
+async function fetchDashboardStats() {
+  try {
+    return await fetchJsonRetry("/dashboard/stats", 3);
+  } catch {
+    return null;
+  }
+}
+
 /** Upload spreadsheet and wait for background scoring job to finish. */
 export async function uploadScoreFile(file, useLlm, onProgress) {
   const data = await uploadFile("/score", file, {
@@ -119,30 +145,81 @@ export async function uploadScoreFile(file, useLlm, onProgress) {
     return data;
   }
 
+  const expectedRows = data.row_count ?? 0;
+  let lastJob = null;
+  let networkErrors = 0;
+
   onProgress?.({
     status: "running",
     phase: "starting",
     phase_label: "Starting",
     processed: 0,
-    total: data.row_count ?? 0,
+    total: expectedRows,
     percent: 0,
     progress_message: "Upload complete — starting score job…",
   });
 
-  for (let attempt = 0; attempt < 400; attempt += 1) {
-    await sleep(1500);
-    const job = await fetchJson(`/score/status/${data.job_id}`);
-    onProgress?.(job);
+  for (let attempt = 0; attempt < 600; attempt += 1) {
+    await sleep(2000);
 
-    if (job.status === "complete") {
-      return job;
-    }
-    if (job.status === "failed") {
-      throw new Error(job.detail || job.progress_message || "Scoring failed on server");
+    try {
+      const job = await fetchJsonRetry(`/score/status/${data.job_id}`, 4);
+      networkErrors = 0;
+      lastJob = job;
+      onProgress?.(job);
+
+      if (job.status === "complete") {
+        return job;
+      }
+      if (job.status === "failed") {
+        throw new Error(job.detail || job.progress_message || "Scoring failed on server");
+      }
+    } catch (err) {
+      if (err.status === 404) {
+        const stats = await fetchDashboardStats();
+        if (stats?.loaded && stats.total_leads >= expectedRows) {
+          return {
+            status: "complete",
+            row_count: stats.total_leads,
+            summary: stats,
+            progress_message: "Scoring finished — dashboard cache loaded",
+          };
+        }
+      }
+
+      networkErrors += 1;
+      onProgress?.({
+        ...(lastJob || {}),
+        status: "running",
+        progress_message: `Connection hiccup — retrying (${networkErrors})… keep tab open`,
+      });
+
+      if (networkErrors >= 15) {
+        const stats = await fetchDashboardStats();
+        if (stats?.loaded && stats.total_leads > 0) {
+          return {
+            status: "complete",
+            row_count: stats.total_leads,
+            summary: stats,
+            progress_message: "Scoring likely finished — dashboard has data",
+          };
+        }
+        throw err;
+      }
     }
   }
 
+  const stats = await fetchDashboardStats();
+  if (stats?.loaded && stats.total_leads >= expectedRows) {
+    return {
+      status: "complete",
+      row_count: stats.total_leads,
+      summary: stats,
+      progress_message: "Scoring finished — dashboard cache loaded",
+    };
+  }
+
   throw new Error(
-    "Scoring is still running on the server. Refresh Dashboard in a few minutes or check Railway logs."
+    "Scoring may still be running on the server. Refresh Dashboard in a few minutes."
   );
 }

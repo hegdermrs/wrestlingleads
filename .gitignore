@@ -9,6 +9,7 @@ frontend/dist/
 # Runtime cache (rebuilt on deploy)
 data/scored_cache.parquet
 data/scored_cache_meta.json
+data/score_jobs/
 
 # CRM exports contain PII — import via Settings after deploy
 leads.xlsx
