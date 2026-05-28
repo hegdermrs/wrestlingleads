@@ -14,9 +14,15 @@ from .config import (
     RULES_WEIGHT,
     TIER_THRESHOLDS,
 )
-from .features import _normalize_hubspot_score, _safe_str
+from .features import (
+    INCOMPLETE_PROFILE_MAX_SCORE,
+    _normalize_hubspot_score,
+    _safe_str,
+    has_coaching_signals,
+    is_incomplete_profile,
+    is_sparse_subscriber,
+)
 from .llm import score_leads_with_llm_async
-from .parser import is_positive_lifecycle
 from .train import load_model, predict_ml_scores
 
 
@@ -79,9 +85,11 @@ def compute_rule_adjustments(row: pd.Series) -> tuple[float, list[str], list[str
         score = min(score, 30.0)
         flags.append("HubSpot marked Unqualified")
 
-    if is_positive_lifecycle(lifecycle) and lifecycle == "Subscriber":
+    if lifecycle == "Subscriber" and has_coaching_signals(row):
         score += 10
-        reasons.append("Existing subscriber — high intent")
+        reasons.append("Existing subscriber with coaching signals")
+    elif is_sparse_subscriber(row):
+        flags.append("Book/content subscriber — no coaching form data")
 
     return max(0.0, min(100.0, score)), reasons, flags
 
@@ -168,6 +176,16 @@ async def score_dataframe_async(
                 rule_score=rule_score,
             )
             final = max(0.0, min(100.0, final))
+
+            cap_reason: str | None = None
+            if is_incomplete_profile(row) or is_sparse_subscriber(row):
+                final = min(final, INCOMPLETE_PROFILE_MAX_SCORE)
+                cap_reason = (
+                    "Cap: sparse subscriber (email-only)"
+                    if is_sparse_subscriber(row)
+                    else "Cap: incomplete profile"
+                )
+
             tier = _score_to_tier(final)
 
             reason_parts = [
@@ -178,6 +196,8 @@ async def score_dataframe_async(
                 reason_parts.append(f"HubSpot 10pt: {hubspot_val:.0f}/100")
             reason_parts.extend(llm.get("reasons", [])[:2])
             reason_parts.extend(rule_reasons[:2])
+            if cap_reason:
+                reason_parts.append(cap_reason)
             flags = llm.get("red_flags", []) + rule_flags
             if flags:
                 reason_parts.append("Flags: " + "; ".join(flags[:2]))

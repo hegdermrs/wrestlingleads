@@ -17,9 +17,25 @@ export const isLocalApi =
   API_URL.includes("127.0.0.1") ||
   API_URL === "/api";
 
+/** True when the UI and API are on different origins (e.g. Netlify → Railway). */
+export const isCrossOriginApi =
+  typeof window !== "undefined" &&
+  API_URL.startsWith("http") &&
+  !API_URL.startsWith(window.location.origin);
+
 export async function fetchJson(path, options = {}) {
   const url = `${API_URL}${path}`;
-  const res = await fetch(url, options);
+  let res;
+  try {
+    res = await fetch(url, options);
+  } catch {
+    const hint = isLocalApi
+      ? "Start the backend with start-backend.bat (http://localhost:8000)."
+      : isCrossOriginApi
+        ? "Cross-origin upload blocked or timed out. Redeploy Railway after the CORS fix, or score locally."
+        : "Check Netlify /api proxy or set VITE_API_URL to your Railway base URL (not /health), then redeploy.";
+    throw new Error(`Cannot reach API at ${url}. ${hint}`);
+  }
   const text = await res.text();
 
   let data = null;
@@ -62,7 +78,17 @@ export async function uploadFile(path, file, params = {}) {
   const url = `${API_URL}${path}${qs ? `?${qs}` : ""}`;
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(url, { method: "POST", body: form });
+  let res;
+  try {
+    res = await fetch(url, { method: "POST", body: form });
+  } catch {
+    const hint = isLocalApi
+      ? "Start the backend with start-backend.bat (http://localhost:8000)."
+      : isCrossOriginApi
+        ? "Cross-origin upload blocked or timed out. Redeploy Railway after the CORS fix, or score locally."
+        : "Check Netlify /api proxy or set VITE_API_URL to your Railway base URL (not /health), then redeploy.";
+    throw new Error(`Cannot reach API at ${url}. ${hint}`);
+  }
   const text = await res.text();
   let data = null;
   try {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -15,6 +16,8 @@ from sklearn.preprocessing import OneHotEncoder
 from .config import CATEGORICAL_COLUMNS
 
 URGENT_DEADLINE_KEYWORDS = ("now", "asap", "immediately", "this week", "next week", "urgent")
+COACHING_SOURCE_MARKERS = ("wufoo", "1-1")
+INCOMPLETE_PROFILE_MAX_SCORE = 35.0
 
 
 def _safe_str(value: object) -> str:
@@ -78,6 +81,48 @@ def build_tabular_features(df: pd.DataFrame) -> pd.DataFrame:
     return features
 
 
+def has_name(row: pd.Series | dict) -> bool:
+    if isinstance(row, dict):
+        return bool(_safe_str(row.get("First Name")) or _safe_str(row.get("Last Name")))
+    return bool(_safe_str(row.get("First Name", "")) or _safe_str(row.get("Last Name", "")))
+
+
+def has_coaching_signals(row: pd.Series | dict) -> bool:
+    """True when lead has data indicating 1-on-1 coaching interest (not email-only)."""
+    get = row.get if isinstance(row, dict) else row.get
+    if _has_value(get("Message", "")):
+        return True
+    if _has_value(get("Job Title", "")):
+        return True
+    if _has_value(get("Job function", "")):
+        return True
+    if _has_value(get("Investment Level", "")):
+        return True
+    if _has_value(get("Wrestler's Goal", "")):
+        return True
+    source = _safe_str(get("Source", "")).lower()
+    return any(marker in source for marker in COACHING_SOURCE_MARKERS)
+
+
+def is_sparse_subscriber(row: pd.Series | dict) -> bool:
+    lifecycle = _safe_str(row.get("Lifecycle Stage", "") if isinstance(row, dict) else row.get("Lifecycle Stage", ""))
+    return lifecycle == "Subscriber" and not has_coaching_signals(row)
+
+
+def is_incomplete_profile(row: pd.Series | dict) -> bool:
+    """Email-only or minimal HubSpot record — not enough to qualify for coaching outreach."""
+    return not has_coaching_signals(row) and not has_name(row)
+
+
+def empty_profile_text_result() -> dict[str, Any]:
+    return {
+        "score": 15.0,
+        "reasons": ["Insufficient coaching form data"],
+        "red_flags": ["Email-only record — likely book/content subscriber"],
+        "source": "empty_profile",
+    }
+
+
 def build_text_bundle(row: pd.Series) -> str:
     """Concatenate text fields for LLM scoring."""
     parts: list[str] = []
@@ -100,6 +145,10 @@ def build_text_bundle(row: pd.Series) -> str:
 
 def heuristic_text_score(row: pd.Series) -> tuple[float, list[str], list[str]]:
     """Fallback text score when LLM is unavailable."""
+    if not build_text_bundle(row).strip():
+        result = empty_profile_text_result()
+        return result["score"], result["reasons"], result["red_flags"]
+
     text = build_text_bundle(row).lower()
     score = 35.0
     reasons: list[str] = []
@@ -142,7 +191,7 @@ def heuristic_text_score(row: pd.Series) -> tuple[float, list[str], list[str]]:
         reasons.append("Seeking mental edge")
 
     if not text.strip():
-        score -= 15
+        score = 15.0
         red_flags.append("No message or context provided")
 
     score = max(0.0, min(100.0, score))

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_URL, checkHealth, fetchJson, uploadFile } from "../api.js";
+import { API_URL, checkHealth, fetchJson, isCrossOriginApi, uploadFile } from "../api.js";
 
 export default function Settings() {
   const [file, setFile] = useState(null);
@@ -89,6 +89,16 @@ export default function Settings() {
           <span>Model: {health?.model_ready ? "Ready" : "Not trained"}</span>
           <span>Cache: {health?.cache_loaded ? "Loaded" : "Empty"}</span>
           <span>DeepSeek: {health?.llm_configured ? "Configured" : "Not set"}</span>
+          {isCrossOriginApi && (
+            <span className="muted">
+              Cross-origin API — file uploads need the latest Railway deploy (CORS fix).
+            </span>
+          )}
+          {API_URL === "/api" && (
+            <span className="error-inline">
+              /api proxy times out on long scores (~10 min). Set VITE_API_URL to Railway URL for uploads.
+            </span>
+          )}
         </div>
       </section>
 

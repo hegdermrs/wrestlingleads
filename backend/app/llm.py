@@ -18,7 +18,7 @@ from .config import (
     DEEPSEEK_RETRY_BASE_DELAY,
     FEW_SHOT_PATH,
 )
-from .features import build_text_bundle, heuristic_text_score
+from .features import build_text_bundle, empty_profile_text_result, heuristic_text_score
 
 SYSTEM_PROMPT = """You are a lead qualification expert for a 1-on-1 mental performance coaching program for wrestlers.
 
@@ -27,6 +27,9 @@ Score each lead 0-100 based on:
 - Specificity of pain points (nerves, choking, confidence, mindset)
 - Purchase intent and readiness
 - Athlete level appropriateness (youth through college)
+
+IMPORTANT: If the lead has no message, job title, goals, or other coaching context (email-only record),
+score 15-25 maximum. Do not infer intent from lifecycle stage alone.
 
 Return ONLY valid JSON with this shape:
 {
@@ -167,6 +170,9 @@ async def _score_lead_with_llm_async(
     few_shot: list[dict],
     model: str,
 ) -> dict[str, Any]:
+    if not build_text_bundle(row).strip():
+        return empty_profile_text_result()
+
     prompt = _build_user_prompt(row, few_shot)
     async with semaphore:
         try:
@@ -210,6 +216,9 @@ def score_leads_with_llm(
 
 def score_lead_with_llm(row: pd.Series, client: Any | None = None) -> dict[str, Any]:
     """Score a single lead with DeepSeek or heuristic fallback."""
+    if not build_text_bundle(row).strip():
+        return empty_profile_text_result()
+
     if client is None:
         return _heuristic_result(row)
 

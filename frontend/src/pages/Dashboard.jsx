@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchJson } from "../api.js";
+import { API_URL, fetchJson } from "../api.js";
 
 const TIERS = ["All", "Hot", "Warm", "Cold", "Unqualified"];
 
@@ -79,7 +79,7 @@ export default function Dashboard() {
   const handleExport = async () => {
     try {
       const params = tier !== "All" ? `?tier=${tier}` : "";
-      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/dashboard/export${params}`);
+      const res = await fetch(`${API_URL}/dashboard/export${params}`);
       if (!res.ok) {
         const text = await res.text();
         let detail = "Export failed";

@@ -87,11 +87,20 @@ def is_positive_lifecycle(lifecycle: object) -> bool:
 
 
 def build_training_label(df: pd.DataFrame) -> pd.Series:
-    """Good lead = Customer or Subscriber, excluding conflicting Unqualified rows."""
-    lifecycle = df.get("Lifecycle Stage", pd.Series([pd.NA] * len(df)))
+    """Good lead = Customer, or Subscriber with coaching form data; excludes conflicting Unqualified."""
+    from .features import has_coaching_signals
+
     lead_status = df.get("Lead Status", pd.Series([pd.NA] * len(df)))
 
-    positive = lifecycle.apply(is_positive_lifecycle)
+    def _is_positive(row: pd.Series) -> bool:
+        lifecycle = str(row.get("Lifecycle Stage", "")).strip()
+        if lifecycle == "Customer":
+            return True
+        if lifecycle == "Subscriber" and has_coaching_signals(row):
+            return True
+        return False
+
+    positive = df.apply(_is_positive, axis=1)
     conflicting = positive & lead_status.astype(str).str.strip().eq("Unqualified")
     label = positive.astype(int)
     label.loc[conflicting] = 0

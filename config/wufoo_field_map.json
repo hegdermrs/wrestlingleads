@@ -1,10 +1,5 @@
 {
-  "instructions": "In Wufoo: open your form → Fields → note each field's API ID (Field1, Field2, ...). Replace the keys below with your actual IDs.",
-  "webhook_url": "https://YOUR-RAILWAY-URL/webhooks/wufoo",
-  "webhook_header": {
-    "name": "X-Wufoo-Webhook-Secret",
-    "value": "match WUFOO_WEBHOOK_SECRET in .env"
-  },
+  "note": "Replace FieldN keys with your actual Wufoo field IDs from form settings.",
   "wufoo_to_qualifier_map": {
     "Field1": "First Name",
     "Field2": "Last Name",

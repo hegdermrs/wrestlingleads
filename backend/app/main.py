@@ -26,10 +26,19 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 app = FastAPI(title="Leads Qualifier API", version="1.0.0")
 app.include_router(webhooks_router)
 
+def _cors_origins() -> list[str]:
+    raw = os.getenv("CORS_ORIGINS", "").strip()
+    if raw:
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return ["*"]
+
+
+_cors = _cors_origins()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_cors,
+    # credentials=True is incompatible with allow_origins=["*"] and breaks cross-origin uploads
+    allow_credentials=_cors != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
