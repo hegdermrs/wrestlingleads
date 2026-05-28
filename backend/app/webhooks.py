@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from .integrations.wufoo import wufoo_payload_to_lead_row
 from .store import store
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+logger = logging.getLogger(__name__)
 
 
 def _verify_wufoo_secret(request: Request, payload: dict[str, Any] | None = None) -> None:
@@ -42,8 +44,26 @@ async def _parse_wufoo_body(request: Request) -> dict[str, Any]:
     return {key: form.get(key) for key in form.keys()}
 
 
+async def _score_wufoo_lead(row: dict[str, Any], use_llm: bool) -> None:
+    """Score in background — Wufoo expects a 2xx response within a few seconds."""
+    try:
+        result = await store.append_lead(row, use_llm=use_llm)
+        logger.info(
+            "Wufoo lead scored email=%s tier=%s action=%s",
+            result.get("email"),
+            result.get("ai_tier"),
+            result.get("action"),
+        )
+    except Exception:
+        logger.exception("Wufoo background scoring failed for email=%s", row.get("Email"))
+
+
 @router.post("/wufoo")
-async def wufoo_webhook(request: Request, use_llm: bool = True) -> dict[str, Any]:
+async def wufoo_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    use_llm: bool = True,
+) -> dict[str, Any]:
     """
     Receive a Wufoo form submission, score it, and append to dashboard cache.
 
@@ -72,13 +92,16 @@ async def wufoo_webhook(request: Request, use_llm: bool = True) -> dict[str, Any
             detail="Webhook missing mappable lead fields. Check wufoo_field_map.json.",
         )
 
-    result = await store.append_lead(row, use_llm=use_llm)
+    entry_id = payload.get("EntryId") or payload.get("EntryID") or row.get("Record ID")
+    logger.info("Wufoo webhook accepted entry=%s email=%s", entry_id, row.get("Email"))
+
+    # Reply immediately — Wufoo times out if DeepSeek scoring blocks the HTTP response.
+    background_tasks.add_task(_score_wufoo_lead, row, use_llm)
 
     return {
         "success": True,
-        "action": result["action"],
-        "lead_id": result.get("email") or row.get("Record ID"),
-        "ai_tier": result["ai_tier"],
-        "ai_score": result["ai_score"],
-        "on_dashboard": result["on_dashboard"],
+        "status": "accepted",
+        "entry_id": entry_id,
+        "email": row.get("Email"),
+        "message": "Lead queued for scoring — check dashboard in ~30 seconds",
     }
