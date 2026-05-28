@@ -121,16 +121,24 @@ def train_model(
     return metrics
 
 
-def load_model(model_path: Path | None = None) -> Pipeline:
+def load_model(model_path: Path | None = None) -> Pipeline | None:
+    """Load trained model, or None if missing and no training data on disk."""
     model_path = model_path or MODEL_PATH
-    if not model_path.exists():
+    if model_path.exists():
+        return joblib.load(model_path)
+    if DEFAULT_TRAINING_FILE.exists():
         train_model()
-    return joblib.load(model_path)
+        return joblib.load(model_path)
+    return None
 
 
 def predict_ml_scores(df: pd.DataFrame, model: Pipeline | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Return probability scores (0-1) and scaled scores (0-100)."""
-    model = model or load_model()
+    model = model if model is not None else load_model()
+    if model is None:
+        neutral = np.full(len(df), 0.5)
+        return neutral, neutral * 100.0
+
     X = build_tabular_features(df)
     if hasattr(model, "feature_names_in_"):
         X = X[list(model.feature_names_in_)]

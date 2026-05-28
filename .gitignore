@@ -15,8 +15,7 @@ leads.xlsx
 qualified.xlsx
 data/*.xlsx
 
-# Large model binary (retrained on startup if missing)
-models/*.joblib
+# Trained model shipped with deploy (retrain locally via build-ai-assets.bat)
 
 # Temp / local
 _leads_analysis_out.txt
