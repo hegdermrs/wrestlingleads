@@ -5,16 +5,18 @@ from __future__ import annotations
 import io
 import json
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .config import DEFAULT_TRAINING_FILE, DEEPSEEK_API_KEY_ENV, METRICS_PATH, MODEL_PATH
 from .parser import load_leads_file
+from .score_jobs import create_job, get_job, update_job
 from .scorer import metrics_summary, score_dataframe_async
 from .store import store
 from .train import train_model
@@ -133,10 +135,36 @@ def retrain() -> dict:
     return {"message": "Model retrained successfully", "metrics": metrics}
 
 
+async def _run_score_job(job_id: str, df: pd.DataFrame, use_llm: bool, filename: str) -> None:
+    update_job(job_id, status="running")
+    try:
+        scored = await score_dataframe_async(df, use_llm=use_llm)
+        store.save(scored, source=filename or "upload.xlsx", note="Scored via Settings")
+        update_job(
+            job_id,
+            status="complete",
+            summary=metrics_summary(scored),
+            row_count=len(scored),
+            finished_at=datetime.now(UTC).isoformat(),
+        )
+    except Exception as exc:
+        update_job(job_id, status="failed", detail=str(exc))
+
+
+@app.get("/score/status/{job_id}")
+def score_job_status(job_id: str) -> dict:
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Score job not found.")
+    return job
+
+
 @app.post("/score")
 async def score_upload(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     use_llm: bool = Query(default=True),
+    async_mode: bool = Query(default=True),
 ) -> dict:
     content = await file.read()
     if not content:
@@ -150,8 +178,20 @@ async def score_upload(
     if df.empty:
         raise HTTPException(status_code=400, detail="No lead rows found in file.")
 
+    filename = file.filename or "upload.xlsx"
+
+    if async_mode:
+        job_id = create_job(len(df), filename)
+        background_tasks.add_task(_run_score_job, job_id, df, use_llm, filename)
+        return {
+            "message": "Scoring started — poll status or refresh Dashboard when complete",
+            "job_id": job_id,
+            "row_count": len(df),
+            "status": "queued",
+        }
+
     scored = await score_dataframe_async(df, use_llm=use_llm)
-    store.save(scored, source=file.filename or "upload.xlsx", note="Scored via Settings")
+    store.save(scored, source=filename, note="Scored via Settings")
 
     return {
         "message": "Leads scored and saved to dashboard cache",

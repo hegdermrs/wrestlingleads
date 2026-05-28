@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_URL, checkHealth, fetchJson, isCrossOriginApi, uploadFile } from "../api.js";
+import { API_URL, checkHealth, fetchJson, isCrossOriginApi, uploadFile, uploadScoreFile } from "../api.js";
 
 export default function Settings() {
   const [file, setFile] = useState(null);
@@ -26,8 +26,9 @@ export default function Settings() {
     setMessage("");
 
     try {
-      const data = await uploadFile("/score", file, { use_llm: String(useLlm) });
-      setMessage(`Scored ${data.row_count} leads. Open Dashboard to view and export instantly.`);
+      const data = await uploadScoreFile(file, useLlm, (progress) => setMessage(progress));
+      const count = data.row_count ?? data.summary?.total_leads ?? "?";
+      setMessage(`Scored ${count} leads. Open Dashboard to view and export instantly.`);
       checkHealth().then(setHealth);
     } catch (err) {
       setError(err.message || "Something went wrong");
@@ -91,7 +92,7 @@ export default function Settings() {
           <span>DeepSeek: {health?.llm_configured ? "Configured" : "Not set"}</span>
           {isCrossOriginApi && (
             <span className="muted">
-              Cross-origin API — file uploads need the latest Railway deploy (CORS fix).
+              Bulk scoring runs in the background (~10 min for 2k leads) — keep this tab open while polling.
             </span>
           )}
           {API_URL === "/api" && (

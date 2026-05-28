@@ -32,7 +32,7 @@ export async function fetchJson(path, options = {}) {
     const hint = isLocalApi
       ? "Start the backend with start-backend.bat (http://localhost:8000)."
       : isCrossOriginApi
-        ? "Cross-origin upload blocked or timed out. Redeploy Railway after the CORS fix, or score locally."
+        ? "Upload timed out or connection dropped. Use the latest deploy with background scoring, or score locally."
         : "Check Netlify /api proxy or set VITE_API_URL to your Railway base URL (not /health), then redeploy.";
     throw new Error(`Cannot reach API at ${url}. ${hint}`);
   }
@@ -85,7 +85,7 @@ export async function uploadFile(path, file, params = {}) {
     const hint = isLocalApi
       ? "Start the backend with start-backend.bat (http://localhost:8000)."
       : isCrossOriginApi
-        ? "Cross-origin upload blocked or timed out. Redeploy Railway after the CORS fix, or score locally."
+        ? "Upload timed out or connection dropped. Use the latest deploy with background scoring, or score locally."
         : "Check Netlify /api proxy or set VITE_API_URL to your Railway base URL (not /health), then redeploy.";
     throw new Error(`Cannot reach API at ${url}. ${hint}`);
   }
@@ -102,4 +102,44 @@ export async function uploadFile(path, file, params = {}) {
     );
   }
   return data;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Upload spreadsheet and wait for background scoring job to finish. */
+export async function uploadScoreFile(file, useLlm, onProgress) {
+  const data = await uploadFile("/score", file, {
+    use_llm: String(useLlm),
+    async_mode: "true",
+  });
+
+  if (!data.job_id) {
+    return data;
+  }
+
+  const rowCount = data.row_count ?? 0;
+  onProgress?.(`Scoring ${rowCount} leads… started`);
+
+  for (let attempt = 0; attempt < 400; attempt += 1) {
+    await sleep(3000);
+    const job = await fetchJson(`/score/status/${data.job_id}`);
+    const minutes = Math.floor(((attempt + 1) * 3) / 60);
+
+    if (job.status === "running" || job.status === "queued") {
+      onProgress?.(`Scoring ${rowCount} leads… ~${minutes} min (keep tab open)`);
+      continue;
+    }
+    if (job.status === "complete") {
+      return job;
+    }
+    if (job.status === "failed") {
+      throw new Error(job.detail || "Scoring failed on server");
+    }
+  }
+
+  throw new Error(
+    "Scoring is still running on the server. Refresh Dashboard in a few minutes or check Railway logs."
+  );
 }
