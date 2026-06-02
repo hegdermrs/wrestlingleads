@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { API_URL, fetchJson } from "../api.js";
-
-const TIERS = ["All", "Hot", "Warm", "Cold", "Unqualified"];
-
-const tierClass = {
-  Hot: "tier-hot",
-  Warm: "tier-warm",
-  Cold: "tier-cold",
-  Unqualified: "tier-unqualified",
-};
+import LeadCard from "../components/leads/LeadCard.jsx";
+import TierFilter from "../components/leads/TierFilter.jsx";
+import Card from "../components/ui/Card.jsx";
+import EmptyState from "../components/ui/EmptyState.jsx";
+import LoadingSkeleton from "../components/ui/LoadingSkeleton.jsx";
+import Toast from "../components/ui/Toast.jsx";
+import Badge from "../components/ui/Badge.jsx";
+import { leadDisplayName, tierLabel } from "../constants/labels.js";
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
@@ -21,62 +21,40 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [emptyCache, setEmptyCache] = useState(false);
-
-  const loadStats = useCallback(async () => {
-    return fetchJson("/dashboard/stats");
-  }, []);
-
-  const loadLeads = useCallback(async () => {
-    const params = new URLSearchParams({ page: String(page), limit: "50" });
-    if (tier !== "All") params.set("tier", tier);
-    if (search.trim()) params.set("search", search.trim());
-
-    try {
-      return await fetchJson(`/dashboard/leads?${params}`);
-    } catch (err) {
-      if (err.status === 404) {
-        setEmptyCache(true);
-        return { total: 0, leads: [] };
-      }
-      throw err;
-    }
-  }, [page, tier, search]);
-
-  const loadRecent = useCallback(async () => {
-    try {
-      return await fetchJson("/dashboard/recent?limit=5");
-    } catch {
-      return { recent: [] };
-    }
-  }, []);
+  const [live, setLive] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError("");
     setEmptyCache(false);
     try {
+      const params = new URLSearchParams({ page: String(page), limit: "30" });
+      if (tier !== "All") params.set("tier", tier);
+      if (search.trim()) params.set("search", search.trim());
+
       const [statsData, leadsData, recentData] = await Promise.all([
-        loadStats(),
-        loadLeads(),
-        loadRecent(),
+        fetchJson("/dashboard/stats"),
+        fetchJson(`/dashboard/leads?${params}`),
+        fetchJson("/dashboard/recent?limit=6").catch(() => ({ recent: [] })),
       ]);
       setStats(statsData);
       setLeads(leadsData.leads || []);
       setTotal(leadsData.total || 0);
       setRecent(recentData.recent || []);
       if (!statsData.loaded) setEmptyCache(true);
+      setLive(true);
+      setTimeout(() => setLive(false), 2000);
     } catch (err) {
-      setError(err.message || "Failed to load dashboard");
+      setError(err.message || "Could not load leads");
     } finally {
       setLoading(false);
     }
-  }, [loadStats, loadLeads, loadRecent]);
+  }, [page, tier, search]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // Poll for new Wufoo leads (webhook scores in background ~30s)
   useEffect(() => {
     const interval = setInterval(refresh, 45_000);
     return () => clearInterval(interval);
@@ -86,22 +64,12 @@ export default function Dashboard() {
     try {
       const params = tier !== "All" ? `?tier=${tier}` : "";
       const res = await fetch(`${API_URL}/dashboard/export${params}`);
-      if (!res.ok) {
-        const text = await res.text();
-        let detail = "Export failed";
-        try {
-          detail = JSON.parse(text).detail || detail;
-        } catch {
-          /* ignore */
-        }
-        setError(detail);
-        return;
-      }
+      if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `leads_${tier.toLowerCase()}_export.xlsx`;
+      link.download = `leads_export.xlsx`;
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (err) {
@@ -110,159 +78,119 @@ export default function Dashboard() {
   };
 
   const tierCounts = stats?.tier_counts || {};
-  const lastUpdated = stats?.meta?.scored_at
-    ? new Date(stats.meta.scored_at).toLocaleString()
-    : "—";
 
   return (
     <>
-      {emptyCache && !error && (
-        <section className="panel banner-warn">
-          <strong>No leads loaded on the server yet.</strong>
-          <p className="muted">
-            Go to <a href="/settings">Settings</a> and import your <code>qualified.xlsx</code> file
-            (fastest — no re-scoring), or upload and score a new export.
+      <div className="page-intro animate-fade-in">
+        <div>
+          <h1 className="page-title">Lead inbox</h1>
+          <p className="page-subtitle">
+            New form submissions appear automatically. Priority leads rise to the top.
           </p>
-        </section>
+        </div>
+        <div className="page-intro-actions">
+          <span className={`live-dot ${live ? "pulse" : ""}`} title="Auto-refreshes every 45s" />
+          <button type="button" className="btn secondary" onClick={refresh} disabled={loading}>
+            Refresh
+          </button>
+          <button type="button" className="btn" onClick={handleExport} disabled={!stats?.loaded}>
+            Download Excel
+          </button>
+        </div>
+      </div>
+
+      {emptyCache && !error && (
+        <Card className="banner-warn" delay={50}>
+          <EmptyState
+            icon="📂"
+            title="No leads loaded yet"
+            message="Import your existing list or connect your form in Setup — takes about a minute."
+            action={
+              <Link to="/setup" className="btn">
+                Go to Setup
+              </Link>
+            }
+          />
+        </Card>
       )}
 
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <h2>Lead Dashboard</h2>
-            <p className="muted">
-              Qualification view excludes Customers (training data only).
-              {stats?.customers_excluded ? ` ${stats.customers_excluded} customers hidden.` : ""}
-            </p>
-          </div>
-          <div className="panel-actions">
-            <span className="muted">Last updated: {lastUpdated}</span>
-            <button className="secondary" onClick={refresh} disabled={loading}>
-              Refresh
-            </button>
-            <button onClick={handleExport} disabled={!stats?.loaded}>
-              Export {tier !== "All" ? tier : "All"}
-            </button>
-          </div>
-        </div>
+      <Card delay={80}>
+        <TierFilter
+          active={tier}
+          counts={tierCounts}
+          total={stats?.total_leads}
+          avgScore={stats?.average_score}
+          onChange={(t) => {
+            setTier(t);
+            setPage(1);
+          }}
+        />
+      </Card>
 
-        <div className="stat-cards">
-          <button
-            className={`stat-card ${tier === "All" ? "active" : ""}`}
-            onClick={() => { setTier("All"); setPage(1); }}
-          >
-            <span className="stat-label">Total Leads</span>
-            <span className="stat-value">{stats?.total_leads ?? "—"}</span>
-            <span className="stat-sub">Avg score {stats?.average_score ?? "—"}</span>
-          </button>
-          {["Hot", "Warm", "Cold", "Unqualified"].map((t) => (
-            <button
-              key={t}
-              className={`stat-card ${tierClass[t]} ${tier === t ? "active" : ""}`}
-              onClick={() => { setTier(t); setPage(1); }}
-            >
-              <span className="stat-label">{t}</span>
-              <span className="stat-value">{tierCounts[t] ?? 0}</span>
-              <span className="stat-sub">
-                Avg {stats?.tier_stats?.[t]?.avg_ai_score ?? "—"}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="panel">
-        <h3>Recent Incoming Leads</h3>
-        <p className="muted">
-          New Wufoo submissions show here first (often <strong>Warm</strong>, not Hot).
-          Check tier <strong>All</strong> or search by email. Configure webhook in{" "}
-          <a href="/settings">Settings</a>.
-        </p>
-        {recent.length === 0 ? (
-          <p className="muted">No recent leads yet.</p>
-        ) : (
-          <div className="recent-list">
+      {recent.length > 0 && (
+        <Card title="Just came in" subtitle="Latest form submissions" delay={120}>
+          <div className="recent-strip">
             {recent.map((lead, i) => (
-              <div key={lead["Record ID"] || lead.Email || i} className="recent-item">
-                <strong>{`${lead["First Name"] || ""} ${lead["Last Name"] || ""}`.trim() || lead.Email}</strong>
-                <span className={`badge ${tierClass[lead["AI Tier"]] || ""}`}>{lead["AI Tier"]}</span>
-                <span>{lead["AI Score"]}</span>
+              <div key={lead["Record ID"] || lead.Email || i} className="recent-chip animate-slide-up" style={{ animationDelay: `${i * 60}ms` }}>
+                <span className="recent-name">{leadDisplayName(lead)}</span>
+                <Badge tier={lead["AI Tier"]} showEmoji={false} />
+                {lead["Assigned Rep"] && <span className="recent-rep">{lead["Assigned Rep"].split(" ")[0]}</span>}
               </div>
             ))}
           </div>
-        )}
-      </section>
+        </Card>
+      )}
 
-      <section className="panel">
-        <div className="panel-header">
-          <h3>{tier === "All" ? "All Leads" : `${tier} Leads`}</h3>
+      <Card
+        title={tier === "All" ? "All leads" : `${tierLabel(tier)} leads`}
+        subtitle={`${total.toLocaleString()} matching · page ${page}`}
+        delay={160}
+        actions={
           <input
-            className="search-input"
-            placeholder="Search name, email, reasons..."
+            className="input search"
+            placeholder="Search name or email…"
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
           />
-        </div>
+        }
+      >
+        <Toast type="error" message={error} />
 
-        {error && <p className="error">{error}</p>}
-        {loading ? (
-          <p className="muted">Loading...</p>
+        {loading && leads.length === 0 ? (
+          <LoadingSkeleton rows={4} />
         ) : leads.length === 0 ? (
-          <p className="muted">No leads found. Import or score leads in Settings.</p>
+          <EmptyState
+            icon="🔍"
+            title="No leads here"
+            message={tier === "All" ? "Try a different search or import leads in Setup." : "No leads in this category right now."}
+          />
         ) : (
           <>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Score</th>
-                    <th>Tier</th>
-                    <th>Action</th>
-                    <th>Reasons</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leads.map((row, i) => (
-                    <tr key={row["Record ID"] || row.Email || i}>
-                      <td>{`${row["First Name"] || ""} ${row["Last Name"] || ""}`.trim() || row.Email || "—"}</td>
-                      <td>{row.Email}</td>
-                      <td>{row["AI Score"]}</td>
-                      <td>
-                        <span className={`badge ${tierClass[row["AI Tier"]] || ""}`}>
-                          {row["AI Tier"]}
-                        </span>
-                      </td>
-                      <td>{row["Recommended Action"]}</td>
-                      <td className="reasons">{row["AI Reasons"]}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="lead-grid">
+              {leads.map((lead, i) => (
+                <LeadCard key={lead["Record ID"] || lead.Email || i} lead={lead} index={i} />
+              ))}
             </div>
             <div className="pagination">
-              <button
-                className="secondary"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous
+              <button type="button" className="btn secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                ← Previous
               </button>
-              <span className="muted">
-                Page {page} · {total} leads
-              </span>
+              <span className="muted">Page {page}</span>
               <button
-                className="secondary"
-                disabled={page * 50 >= total}
+                type="button"
+                className="btn secondary"
+                disabled={page * 30 >= total}
                 onClick={() => setPage((p) => p + 1)}
               >
-                Next
+                Next →
               </button>
             </div>
           </>
         )}
-      </section>
+      </Card>
     </>
   );
 }

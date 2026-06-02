@@ -1,31 +1,22 @@
-import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import AppShell from "./components/layout/AppShell.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Settings from "./pages/Settings.jsx";
+import Rules from "./pages/Rules.jsx";
 import "./App.css";
 
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="page">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">LeadsWrestling</p>
-            <h1>Lead Qualifier</h1>
-          </div>
-          <nav className="nav">
-            <NavLink to="/" end className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
-              Dashboard
-            </NavLink>
-            <NavLink to="/settings" className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
-              Settings
-            </NavLink>
-          </nav>
-        </header>
-        <Routes>
+      <Routes>
+        <Route element={<AppShell />}>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
-      </div>
+          <Route path="/team" element={<Rules />} />
+          <Route path="/setup" element={<Settings />} />
+          <Route path="/settings" element={<Navigate to="/setup" replace />} />
+          <Route path="/rules" element={<Navigate to="/team" replace />} />
+        </Route>
+      </Routes>
     </BrowserRouter>
   );
 }

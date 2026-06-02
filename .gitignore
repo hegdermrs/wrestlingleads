@@ -13,6 +13,8 @@ data/baseline_qualified.parquet
 data/baseline_qualified_meta.json
 data/score_jobs/
 data/reports/
+data/routing_config.json
+data/routing_log.json
 
 # CRM exports contain PII — import via Settings after deploy
 leads.xlsx

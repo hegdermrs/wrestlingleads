@@ -1,12 +1,26 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import ScoreProgress from "../components/ScoreProgress.jsx";
-import { API_URL, checkHealth, downloadCompareExport, downloadTierReport, fetchCompareSummary, fetchJson, isCrossOriginApi, uploadBaseline, uploadFile, uploadScoreFile } from "../api.js";
+import Card from "../components/ui/Card.jsx";
+import Accordion from "../components/ui/Accordion.jsx";
+import Toast from "../components/ui/Toast.jsx";
+import Toggle from "../components/ui/Toggle.jsx";
+import {
+  checkHealth,
+  downloadCompareExport,
+  downloadTierReport,
+  fetchCompareSummary,
+  fetchJson,
+  uploadBaseline,
+  uploadFile,
+  uploadScoreFile,
+} from "../api.js";
 
-const RAILWAY_API_URL = "https://wrestlingleads-production.up.railway.app";
+const WEBHOOK_URL = "https://wrestlingleads-production.up.railway.app/webhooks/wufoo";
 
 export default function Settings() {
-  const [file, setFile] = useState(null);
   const [qualifiedFile, setQualifiedFile] = useState(null);
+  const [scoreFile, setScoreFile] = useState(null);
   const [baselineFile, setBaselineFile] = useState(null);
   const [reportFile, setReportFile] = useState(null);
   const [useLlm, setUseLlm] = useState(true);
@@ -14,304 +28,205 @@ export default function Settings() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [health, setHealth] = useState(null);
-  const [metrics, setMetrics] = useState(null);
   const [scoreProgress, setScoreProgress] = useState(null);
   const [compareSummary, setCompareSummary] = useState(null);
   const [wufooStatus, setWufooStatus] = useState(null);
 
-  const refreshCompare = () => fetchCompareSummary().then(setCompareSummary);
-
   useEffect(() => {
     checkHealth().then(setHealth);
-    fetchJson("/metrics").then(setMetrics).catch(() => setMetrics(null));
-    fetchJson("/webhooks/wufoo/status").then(setWufooStatus).catch(() => setWufooStatus(null));
-    refreshCompare();
+    fetchJson("/webhooks/wufoo/status").then(setWufooStatus).catch(() => null);
+    fetchCompareSummary().then(setCompareSummary).catch(() => null);
   }, []);
 
-  const handleScore = async () => {
-    if (!file) {
-      setError("Please select a spreadsheet first.");
-      return;
+  const handleImportQualified = async () => {
+    if (!qualifiedFile) return setError("Choose your Excel file first.");
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      const data = await uploadFile("/settings/import-qualified", qualifiedFile);
+      setMessage(`Loaded ${data.row_count?.toLocaleString()} leads — open Leads to view.`);
+      checkHealth().then(setHealth);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleScore = async () => {
+    if (!scoreFile) return setError("Choose your HubSpot export first.");
     setLoading(true);
     setError("");
     setMessage("");
     setScoreProgress(null);
-
     try {
-      const data = await uploadScoreFile(file, useLlm, setScoreProgress);
+      const data = await uploadScoreFile(scoreFile, useLlm, setScoreProgress);
       const count = data.row_count ?? data.summary?.total_leads ?? "?";
-      setScoreProgress((prev) => ({
-        ...prev,
-        status: "complete",
-        percent: 100,
-        phase_label: "Complete",
-        progress_message: `Done — ${count} leads scored`,
-      }));
-      setMessage(`Scored ${count} leads. Open Dashboard to view and export instantly.`);
+      setMessage(`Done! ${count} leads scored and ready in your inbox.`);
       checkHealth().then(setHealth);
     } catch (err) {
-      setError(err.message || "Something went wrong");
+      setError(err.message);
       setScoreProgress(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleImportQualified = async () => {
-    if (!qualifiedFile) {
-      setError("Please select your qualified.xlsx file.");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    setMessage("");
-
-    try {
-      const data = await uploadFile("/settings/import-qualified", qualifiedFile);
-      setMessage(`Imported ${data.row_count} pre-scored leads to dashboard cache.`);
-      checkHealth().then(setHealth);
-      refreshCompare();
-    } catch (err) {
-      setError(err.message || "Import failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleImportBaseline = async () => {
-    if (!baselineFile) {
-      setError("Please select your previous qualified.xlsx export.");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    setMessage("");
-    try {
-      const data = await uploadBaseline(baselineFile);
-      setCompareSummary(data.summary);
-      setMessage(`Baseline loaded (${data.row_count} rows). Use Compare Export or full report below.`);
-      checkHealth().then(setHealth);
-    } catch (err) {
-      setError(err.message || "Baseline import failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCompareExport = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      await downloadCompareExport("All");
-      setMessage("Downloaded tier compare export with Previous Tier and Tier Change columns.");
-    } catch (err) {
-      setError(err.message || "Compare export failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTierReport = async () => {
-    if (!reportFile) {
-      setError("Select your previous qualified.xlsx for the full Hot tier report.");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      await downloadTierReport(reportFile);
-      setMessage("Downloaded hot_tier_comparison.xlsx — share Client Review Template sheet with client.");
-    } catch (err) {
-      setError(err.message || "Tier report failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRetrain = async () => {
-    setLoading(true);
-    setError("");
-    setMessage("");
-    try {
-      const response = await fetch(`${API_URL}/train`, { method: "POST" });
-      if (!response.ok) throw new Error("Retrain failed");
-      const data = await response.json();
-      setMetrics(data.metrics);
-      setMessage("Model retrained successfully.");
-    } catch (err) {
-      setError(err.message || "Retrain failed");
-    } finally {
-      setLoading(false);
-    }
+  const copyWebhook = () => {
+    navigator.clipboard?.writeText(WEBHOOK_URL);
+    setMessage("Webhook link copied!");
   };
 
   return (
     <>
-      <section className="panel">
-        <h2>Settings</h2>
-        <p className="muted">
-          Score new exports or import an existing qualified file. Dashboard reads from cache — no re-scoring on export.
-        </p>
-        <div className="status-card inline-status">
-          <span>API: {health?.status === "ok" ? "Online" : "Offline"}</span>
-          <span>URL: <code>{API_URL}</code></span>
-          {API_URL.includes("localhost") && !window.location.hostname.includes("localhost") && (
-            <span className="error-inline">Still using localhost — redeploy Netlify or wait for /api proxy build</span>
-          )}
-          <span>Model: {health?.model_ready ? "Ready" : "Not trained"}</span>
-          <span>Cache: {health?.cache_loaded ? "Loaded" : "Empty"}</span>
-          <span>Baseline: {health?.baseline_loaded || compareSummary?.baseline_loaded ? "Loaded" : "None"}</span>
-          <span>DeepSeek: {health?.llm_configured ? "Configured" : "Not set"}</span>
-          {isCrossOriginApi && (
-            <span className="muted">
-              Bulk scoring runs in the background (~10 min for 2k leads) — keep this tab open while polling.
-            </span>
-          )}
-          {API_URL === "/api" && (
-            <span className="error-inline">
-              /api proxy times out on long scores (~10 min). Set VITE_API_URL to Railway URL for uploads.
-            </span>
-          )}
+      <div className="page-intro animate-fade-in">
+        <div>
+          <h1 className="page-title">Setup</h1>
+          <p className="page-subtitle">Import your list, connect your form, and you're live.</p>
         </div>
-      </section>
+        <div className={`status-pill ${health?.status === "ok" ? "ok" : "warn"}`}>
+          {health?.status === "ok" ? "● System online" : "○ Offline"}
+        </div>
+      </div>
 
-      <section className="panel">
-        <h3>Compare with Previous Export</h3>
-        <p className="muted">
-          Upload your old qualified.xlsx to see who moved in/out of Hot. Export includes{" "}
-          <code>Previous AI Tier</code>, <code>Tier Change</code>, and client review columns.
+      <Toast type="success" message={message} />
+      <Toast type="error" message={error} />
+
+      <Card title="Step 1 — Load your leads" subtitle="Fastest: import a file you've already scored" delay={60}>
+        <p className="card-copy">
+          Have an Excel export with scores already? Upload it here — shows up instantly in{" "}
+          <Link to="/">Leads</Link>.
         </p>
-        {compareSummary?.loaded && (
-          <div className="compare-stats">
-            <span>Still Hot: {compareSummary.still_hot}</span>
-            <span>Dropped from Hot: {compareSummary.dropped_from_hot}</span>
-            <span>New Hot: {compareSummary.new_hot}</span>
-            <span>Investigate: {compareSummary.investigate_count}</span>
+        <label className="file-drop">
+          <input type="file" accept=".xlsx" onChange={(e) => setQualifiedFile(e.target.files?.[0] || null)} />
+          <span>{qualifiedFile ? qualifiedFile.name : "Choose Excel file (.xlsx)"}</span>
+        </label>
+        <button type="button" className="btn" onClick={handleImportQualified} disabled={loading || !qualifiedFile}>
+          Import leads
+        </button>
+      </Card>
+
+      <Card title="Step 2 — Connect your form" subtitle="Wufoo sends new submissions automatically" delay={100}>
+        <div className="steps-list">
+          <div className="step-item">
+            <span className="step-num">1</span>
+            <p>In Wufoo → your form → <strong>Integrations → WebHook</strong></p>
+          </div>
+          <div className="step-item">
+            <span className="step-num">2</span>
+            <p>Paste this URL:</p>
+            <div className="copy-row">
+              <code className="copy-code">{WEBHOOK_URL}</code>
+              <button type="button" className="btn secondary small" onClick={copyWebhook}>
+                Copy
+              </button>
+            </div>
+          </div>
+          <div className="step-item">
+            <span className="step-num">3</span>
+            <p>Set the Handshake Key to match what your admin configured on the server</p>
+          </div>
+        </div>
+        {wufooStatus && (
+          <div className="status-grid">
+            <div className={`status-tile ${wufooStatus.secret_configured ? "ok" : "warn"}`}>
+              <span>Form security</span>
+              <strong>{wufooStatus.secret_configured ? "Connected" : "Needs setup"}</strong>
+            </div>
+            <div className="status-tile ok">
+              <span>Leads loaded</span>
+              <strong>{wufooStatus.cache_row_count?.toLocaleString() ?? "—"}</strong>
+            </div>
+            <div className="status-tile">
+              <span>Last new lead</span>
+              <strong>
+                {wufooStatus.last_scored_at
+                  ? new Date(wufooStatus.last_scored_at).toLocaleString()
+                  : "—"}
+              </strong>
+            </div>
           </div>
         )}
-        <div className="controls">
-          <input
-            type="file"
-            accept=".xlsx"
-            onChange={(e) => setBaselineFile(e.target.files?.[0] || null)}
-          />
-          <div className="button-row">
-            <button onClick={handleImportBaseline} disabled={loading || !baselineFile}>
-              {loading ? "Working…" : "Load Baseline"}
-            </button>
-            <button className="secondary" onClick={handleCompareExport} disabled={loading || !compareSummary?.loaded}>
-              Download Compare Export
-            </button>
-          </div>
-          <p className="muted">Or generate the full multi-sheet report (Dropped / New / Client Review Template):</p>
-          <input
-            type="file"
-            accept=".xlsx"
-            onChange={(e) => setReportFile(e.target.files?.[0] || null)}
-          />
-          <button onClick={handleTierReport} disabled={loading || !reportFile || !health?.cache_loaded}>
-            {loading ? "Working…" : "Download Full Hot Tier Report"}
-          </button>
-        </div>
-      </section>
+        <p className="field-hint">
+          New submissions appear in <Link to="/">Leads</Link> within ~30 seconds, then route to your team in{" "}
+          <Link to="/team">Team</Link>.
+        </p>
+      </Card>
 
-      <section className="panel">
-        <h3>Import Pre-Scored File</h3>
-        <p className="muted">Load your qualified.xlsx without re-running DeepSeek (~instant).</p>
-        <div className="controls">
-          <input
-            type="file"
-            accept=".xlsx"
-            onChange={(e) => setQualifiedFile(e.target.files?.[0] || null)}
-          />
-          <button onClick={handleImportQualified} disabled={loading || !qualifiedFile}>
-            {loading ? "Working..." : "Import to Dashboard"}
-          </button>
-        </div>
-      </section>
+      <Card title="Step 3 — Score a fresh HubSpot export" subtitle="Optional — takes ~10 minutes for 2,000 leads" delay={140}>
+        <label className="file-drop">
+          <input type="file" accept=".xlsx,.csv" onChange={(e) => setScoreFile(e.target.files?.[0] || null)} />
+          <span>{scoreFile ? scoreFile.name : "Choose HubSpot export (.xlsx or .csv)"}</span>
+        </label>
+        <Toggle
+          checked={useLlm}
+          onChange={setUseLlm}
+          label="Use AI text scoring"
+          description="Recommended — reads each lead's message for better accuracy"
+        />
+        <button type="button" className="btn" onClick={handleScore} disabled={loading || !scoreFile}>
+          {loading ? "Scoring…" : "Score & save"}
+        </button>
+        <ScoreProgress progress={scoreProgress} />
+      </Card>
 
-      <section className="panel">
-        <h3>Score New Export</h3>
-        <div className="controls">
-          <input
-            type="file"
-            accept=".xlsx,.csv"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-          />
-          <label className="checkbox">
-            <input type="checkbox" checked={useLlm} onChange={(e) => setUseLlm(e.target.checked)} />
-            Use DeepSeek text scoring (parallel, ~10 min for 2k leads)
+      <Card delay={180}>
+        <Accordion title="Advanced — compare old vs new Hot list" subtitle="For calibration reviews">
+          {compareSummary?.loaded && (
+            <div className="compare-pills">
+              <span>Still priority: {compareSummary.still_hot}</span>
+              <span>Dropped: {compareSummary.dropped_from_hot}</span>
+              <span>New: {compareSummary.new_hot}</span>
+            </div>
+          )}
+          <label className="file-drop compact">
+            <input type="file" accept=".xlsx" onChange={(e) => setBaselineFile(e.target.files?.[0] || null)} />
+            <span>{baselineFile ? baselineFile.name : "Previous export (.xlsx)"}</span>
           </label>
           <div className="button-row">
-            <button onClick={handleScore} disabled={loading || !file}>
-              {loading ? "Scoring…" : "Score & Save to Dashboard"}
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={loading || !baselineFile}
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  await uploadBaseline(baselineFile);
+                  setMessage("Baseline loaded.");
+                  fetchCompareSummary().then(setCompareSummary);
+                } catch (e) {
+                  setError(e.message);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            >
+              Load baseline
             </button>
-            <button className="secondary" onClick={handleRetrain} disabled={loading}>
-              Retrain Model
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={!compareSummary?.loaded}
+              onClick={() => downloadCompareExport("All").catch((e) => setError(e.message))}
+            >
+              Download comparison
             </button>
           </div>
-          <ScoreProgress progress={scoreProgress} />
-        </div>
-      </section>
-
-      <section className="panel">
-        <h3>Wufoo Webhook</h3>
-        <p className="muted">
-          Wufoo must POST directly to Railway (not the Netlify site URL for uploads).
-        </p>
-        <ul className="muted" style={{ marginTop: "0.5rem" }}>
-          <li>
-            <strong>Webhook URL:</strong>{" "}
-            <code>{RAILWAY_API_URL}/webhooks/wufoo</code>
-          </li>
-          <li>
-            <strong>Handshake Key</strong> (in Wufoo): must exactly match{" "}
-            <code>WUFOO_WEBHOOK_SECRET</code> on Railway
-          </li>
-          <li>Field map: <code>config/wufoo_field_map.json</code></li>
-        </ul>
-        {wufooStatus && (
-          <div className="metric-grid" style={{ marginTop: "1rem" }}>
-            <div>
-              <strong>Secret on server</strong>
-              <span>{wufooStatus.secret_configured ? "Yes" : "No — webhooks rejected or insecure"}</span>
-            </div>
-            <div>
-              <strong>Field map</strong>
-              <span>{wufooStatus.field_map_loaded ? `${wufooStatus.mapped_field_count} fields` : "Missing"}</span>
-            </div>
-            <div>
-              <strong>Leads in cache</strong>
-              <span>{wufooStatus.cache_row_count ?? "—"}</span>
-            </div>
-            <div>
-              <strong>Last lead scored</strong>
-              <span>{wufooStatus.last_scored_at ? new Date(wufooStatus.last_scored_at).toLocaleString() : "—"}</span>
-            </div>
-          </div>
-        )}
-        <p className="muted" style={{ marginTop: "0.75rem" }}>
-          After a form submit, wait ~30 seconds and click <strong>Refresh</strong> on Dashboard.
-          New leads often land as <strong>Warm</strong> — use tier <strong>All</strong> or check{" "}
-          <strong>Recent Incoming Leads</strong>.
-        </p>
-      </section>
-
-      {metrics && (
-        <section className="panel metrics">
-          <h3>Model Metrics</h3>
-          <div className="metric-grid">
-            <div><strong>ROC AUC</strong><span>{metrics.roc_auc?.toFixed(3)}</span></div>
-            <div><strong>Precision</strong><span>{metrics.precision?.toFixed(3)}</span></div>
-            <div><strong>Recall</strong><span>{metrics.recall?.toFixed(3)}</span></div>
-            <div><strong>Hot Tier Precision</strong><span>{metrics.hot_tier_precision?.toFixed(3)}</span></div>
-          </div>
-        </section>
-      )}
-
-      {message && <p className="success">{message}</p>}
-      {error && <p className="error">{error}</p>}
+          <label className="file-drop compact">
+            <input type="file" accept=".xlsx" onChange={(e) => setReportFile(e.target.files?.[0] || null)} />
+            <span>{reportFile ? reportFile.name : "Full tier report file"}</span>
+          </label>
+          <button
+            type="button"
+            className="btn ghost"
+            disabled={!reportFile}
+            onClick={() => downloadTierReport(reportFile).catch((e) => setError(e.message))}
+          >
+            Download full report
+          </button>
+        </Accordion>
+      </Card>
     </>
   );
 }

@@ -36,6 +36,11 @@ DISPLAY_COLUMNS = [
     "AI Reasons",
     "Source",
     "Create Date",
+    "Assigned Rep",
+    "Assigned Email",
+    "Route Bucket",
+    "Route Reason",
+    "Routed At",
 ]
 
 # Dev/integration test rows — never show in Recent or keep in cache after restart
@@ -119,6 +124,7 @@ class ScoredLeadsStore:
         if CACHE_PARQUET.exists():
             self._df = pd.read_parquet(CACHE_PARQUET)
             self._meta = self._read_meta()
+            self._ensure_routing_columns()
         else:
             for path in (QUALIFIED_FALLBACK, ROOT_QUALIFIED):
                 if path.exists() and self._load_qualified_file(path):
@@ -129,6 +135,7 @@ class ScoredLeadsStore:
             self._baseline_meta = self._read_baseline_meta()
 
         self.purge_synthetic_test_leads()
+        self._ensure_routing_columns()
 
     def purge_synthetic_test_leads(self) -> int:
         """Remove integration-test rows from cache (e.g. @example.com webhook probes)."""
@@ -165,6 +172,57 @@ class ScoredLeadsStore:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         self._df.to_parquet(CACHE_PARQUET, index=False)
         self._write_meta()
+
+    def _ensure_routing_columns(self) -> None:
+        if self._df is None:
+            return
+        for col in ("Assigned Rep", "Assigned Email", "Route Bucket", "Route Reason", "Routed At"):
+            if col not in self._df.columns:
+                self._df[col] = ""
+
+    def find_lead_index(self, email: str = "", record_id: str = "") -> int | None:
+        if not self.loaded or self._df is None:
+            return None
+        if email:
+            idx = self._find_email_index(email)
+            if idx is not None:
+                return idx
+        if record_id and "Record ID" in self._df.columns:
+            matches = self._df[self._df["Record ID"].astype(str).str.strip() == str(record_id).strip()]
+            if not matches.empty:
+                return int(matches.index[0])
+        return None
+
+    def get_row_at(self, idx: int) -> pd.Series:
+        assert self._df is not None
+        return self._df.iloc[idx]
+
+    def apply_routing_result(self, email: str, result: dict[str, Any]) -> None:
+        if not result.get("assigned") or not result.get("rep"):
+            return
+        idx = self._find_email_index(email)
+        if idx is None or self._df is None:
+            return
+        rep = result["rep"]
+        self._ensure_routing_columns()
+        self._df.at[idx, "Assigned Rep"] = _safe_str(rep.get("name"))
+        self._df.at[idx, "Assigned Email"] = _safe_str(rep.get("email"))
+        self._df.at[idx, "Route Bucket"] = _safe_str(result.get("route_bucket"))
+        self._df.at[idx, "Route Reason"] = _safe_str(result.get("route_reason"))
+        self._df.at[idx, "Routed At"] = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
+        self._persist()
+
+    def iter_unrouted_leads(self, limit: int = 50):
+        if not self.loaded or self._df is None:
+            return
+        self._ensure_routing_columns()
+        dashboard = self._dashboard_df()
+        dashboard = dashboard[~dashboard.apply(is_synthetic_test_lead, axis=1)]
+        if "Routed At" in dashboard.columns:
+            dashboard = dashboard[dashboard["Routed At"].astype(str).str.strip() == ""]
+        dashboard = _sort_dashboard_newest(dashboard)
+        for _, row in dashboard.head(limit).iterrows():
+            yield row
 
     def _load_qualified_file(self, path: Path) -> bool:
         try:
@@ -330,7 +388,20 @@ class ScoredLeadsStore:
         if "Create Date" not in scored.columns or not _safe_str(scored.iloc[0].get("Create Date", "")):
             scored.at[scored.index[0], "Create Date"] = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
 
-        return self.append_scored_row(scored.iloc[0])
+        result = self.append_scored_row(scored.iloc[0])
+
+        from .routing import route_and_notify
+        from .routing_config import load_routing_config
+
+        config = load_routing_config()
+        if config.get("auto_route_enabled") and result.get("email"):
+            row_series = self._df.iloc[result["row_index"]]
+            route_result = route_and_notify(row_series, config)
+            if route_result.get("assigned"):
+                self.apply_routing_result(result["email"], route_result)
+            result["routing"] = route_result
+
+        return result
 
     def get_stats(self) -> dict[str, Any]:
         if not self.loaded:

@@ -49,10 +49,10 @@ async def _score_wufoo_lead(row: dict[str, Any], use_llm: bool) -> None:
     try:
         result = await store.append_lead(row, use_llm=use_llm)
         logger.info(
-            "Wufoo lead scored email=%s tier=%s action=%s",
+            "Wufoo lead scored email=%s tier=%s routed=%s",
             result.get("email"),
             result.get("ai_tier"),
-            result.get("action"),
+            (result.get("routing") or {}).get("assigned"),
         )
     except Exception:
         logger.exception("Wufoo background scoring failed for email=%s", row.get("Email"))

@@ -22,12 +22,14 @@ from .scorer import metrics_summary, score_dataframe_async
 from .store import store
 from .train import train_model
 from .webhooks import router as webhooks_router
+from .routing_api import router as routing_router
 
 load_dotenv()
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 app = FastAPI(title="Leads Qualifier API", version="1.0.0")
 app.include_router(webhooks_router)
+app.include_router(routing_router)
 
 def _cors_origins() -> list[str]:
     raw = os.getenv("CORS_ORIGINS", "").strip()
@@ -71,6 +73,7 @@ def health() -> dict:
         "cache_loaded": store.loaded,
         "baseline_loaded": store.baseline_loaded,
         "wufoo_secret_configured": bool(os.getenv("WUFOO_WEBHOOK_SECRET")),
+        "smtp_configured": bool(os.getenv("SMTP_HOST") and os.getenv("SMTP_USER")),
     }
 
 

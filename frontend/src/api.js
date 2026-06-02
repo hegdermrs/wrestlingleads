@@ -282,3 +282,31 @@ export async function downloadTierReport(file) {
   link.click();
   window.URL.revokeObjectURL(blobUrl);
 }
+
+export function fetchRoutingRules() {
+  return fetchJson("/routing/rules");
+}
+
+export function saveRoutingRules(rules) {
+  return fetchJson("/routing/rules", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(rules),
+  });
+}
+
+export function fetchRoutingStats() {
+  return fetchJson("/routing/stats");
+}
+
+export function sendRoute(email, { force = false, send_email = true } = {}) {
+  return fetchJson("/routing/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, force, send_email }),
+  });
+}
+
+export function sendUnrouted() {
+  return fetchJson("/routing/send-unrouted", { method: "POST" });
+}

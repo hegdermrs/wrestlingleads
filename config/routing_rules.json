@@ -1,0 +1,42 @@
+{
+  "auto_route_enabled": true,
+  "send_email_on_route": true,
+  "urgent_min_score": 80,
+  "jake_min_warm_score": 70,
+  "west_coast_states": ["CA", "OR", "WA", "NV", "AZ", "HI", "AK"],
+  "reps": [
+    {
+      "id": "gene",
+      "name": "Gene Zannetti",
+      "email": "genezannetti@gmail.com",
+      "bucket": "urgent",
+      "weekly_cap": 2,
+      "description": "Red-hot urgent leads (~1–2/week)"
+    },
+    {
+      "id": "jake",
+      "name": "Jake Hunter",
+      "email": "jthunter600@gmail.com",
+      "bucket": "hot_warm",
+      "weekly_cap": 5,
+      "description": "Very warm / Hot leads (~5/week)"
+    },
+    {
+      "id": "beau",
+      "name": "Beau Tillman",
+      "email": "beautillman80@gmail.com",
+      "bucket": "general",
+      "weekly_cap": null,
+      "description": "General pool (Central time)"
+    },
+    {
+      "id": "eric",
+      "name": "Eric Spencer",
+      "email": "evspencer@gmail.com",
+      "bucket": "general",
+      "weekly_cap": null,
+      "west_coast_priority": true,
+      "description": "General pool — West Coast priority"
+    }
+  ]
+}
