@@ -256,8 +256,10 @@ export default function Settings() {
           <li>Redeploy → Test n8n webhook below → enable <strong>Notify the assigned rep</strong> on Team</li>
         </ol>
         <p className="field-hint">
-          Payload includes <code>lead</code>, <code>rep</code>, <code>assignment</code>, and pre-built{" "}
-          <code>email.subject</code> / <code>email.text</code> / <code>email.html</code> for your email node.
+          <strong>Gmail node:</strong> set message type to <strong>HTML</strong> and body to{" "}
+          <code>{`{{ $json.body.email.html }}`}</code> (not <code>email.text</code>). Subject:{" "}
+          <code>{`{{ $json.body.email.subject }}`}</code> · To:{" "}
+          <code>{`{{ $json.body.rep.email }}`}</code>
         </p>
         <button type="button" className="btn secondary" onClick={handleN8nTest} disabled={n8nTesting}>
           {n8nTesting ? "Sending test…" : "Test n8n webhook"}

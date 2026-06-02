@@ -78,6 +78,7 @@ def build_n8n_payload(
             "text": text,
             "html": html,
             "to": _safe_str(rep.get("email", "")),
+            "format": "html",
         },
     }
 
