@@ -130,7 +130,9 @@ export default function Settings() {
       const result = await testSmtpConnection();
       if (result.ok) {
         const via = result.transport === "resend" ? "Resend (HTTPS)" : "Gmail SMTP";
-        setMessage(`Email connection OK via ${via}${result.user ? ` (${result.user})` : ""}.`);
+        const sandbox = result.sandbox ? " — sandbox mode (one inbox)" : "";
+        const note = result.note ? ` ${result.note}` : "";
+        setMessage(`Email connection OK via ${via}${sandbox}.${note}`);
       } else {
         setError(result.error || "Email test failed.");
       }
@@ -245,20 +247,27 @@ export default function Settings() {
         </div>
 
         <h4 className="setup-option-title">Option A — Resend (recommended on Railway Hobby)</h4>
+
+        <div className="banner-warn email-railway-banner">
+          <p>
+            <strong>No DNS yet?</strong> Set <code>RESEND_SANDBOX_TO</code> to the email you used to sign up
+            for Resend. All lead alerts go to that one inbox (from <code>onboarding@resend.dev</code>) until
+            you verify the domain.
+          </p>
+        </div>
+
         <ol className="email-checklist">
+          <li>Set <code>RESEND_API_KEY</code> on Railway</li>
           <li>
-            Create a free account at{" "}
-            <a href="https://resend.com" target="_blank" rel="noreferrer">
-              resend.com
-            </a>
+            <strong>No DNS:</strong> set <code>RESEND_SANDBOX_TO</code> = your Resend account email (e.g. the
+            Gmail you signed up with)
           </li>
-          <li>Add and verify domain <strong>wrestlingmindset.com</strong> (DNS records in Resend dashboard)</li>
-          <li>Create an API key → set <code>RESEND_API_KEY</code> on Railway</li>
           <li>
-            Set <code>ROUTING_FROM_EMAIL</code> to{" "}
-            <code>Leads Wrestling &lt;mindset@wrestlingmindset.com&gt;</code>
+            <strong>With DNS later:</strong> verify <strong>wrestlingmindset.com</strong> in Resend, remove{" "}
+            <code>RESEND_SANDBOX_TO</code>, set{" "}
+            <code>ROUTING_FROM_EMAIL=Leads Wrestling &lt;mindset@wrestlingmindset.com&gt;</code>
           </li>
-          <li>Redeploy — Resend takes priority over SMTP when the API key is set</li>
+          <li>Redeploy → Test email connection</li>
         </ol>
 
         <h4 className="setup-option-title">Option B — Gmail SMTP (Railway Pro only)</h4>

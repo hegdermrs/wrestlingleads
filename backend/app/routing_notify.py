@@ -31,6 +31,29 @@ def _resend_api_key() -> str:
     return os.getenv("RESEND_API_KEY", "").strip()
 
 
+def _resend_sandbox_to() -> str:
+    """Inbox that receives all rep emails until the domain is verified in Resend."""
+    return os.getenv("RESEND_SANDBOX_TO", "").strip()
+
+
+def resend_sandbox_enabled() -> bool:
+    """Resend allows onboarding@resend.dev without DNS — only to your account email."""
+    return bool(_resend_api_key() and _resend_sandbox_to())
+
+
+def _resolve_delivery(rep_email: str) -> tuple[str, str | None]:
+    """Return (to_address, optional sandbox banner for the rep)."""
+    rep_email = _safe_str(rep_email)
+    sandbox_to = _resend_sandbox_to()
+    if resend_sandbox_enabled():
+        banner = (
+            f"⚠️ SANDBOX MODE — This lead was assigned to {rep_email or 'a rep'}. "
+            "Verify wrestlingmindset.com in Resend to email reps directly."
+        )
+        return sandbox_to, banner
+    return rep_email, None
+
+
 def _smtp_settings() -> dict[str, str | int]:
     host = os.getenv("SMTP_HOST", "").strip()
     user = os.getenv("SMTP_USER", "").strip()
@@ -67,10 +90,12 @@ def email_configured() -> bool:
 
 
 def _from_header() -> str:
+    if resend_sandbox_enabled():
+        return "Leads Wrestling <onboarding@resend.dev>"
     settings = _smtp_settings()
     from_raw = str(settings["from_raw"])
     from_email = str(settings["from_email"])
-    if from_raw:
+    if from_raw and not resend_sandbox_enabled():
         return from_raw
     return formataddr(("Leads Wrestling", from_email))
 
@@ -117,12 +142,25 @@ def verify_resend_connection() -> dict[str, Any]:
     data = response.json()
     domains = data.get("data") or []
     verified = [d for d in domains if d.get("status") == "verified"]
-    return {
+    result: dict[str, Any] = {
         "ok": True,
         "transport": "resend",
         "domains_verified": len(verified),
         "from": _from_header(),
     }
+    if resend_sandbox_enabled():
+        result["sandbox"] = True
+        result["sandbox_to"] = _resend_sandbox_to()
+        result["note"] = (
+            "Sending via Resend sandbox (no DNS). All rep emails go to RESEND_SANDBOX_TO until "
+            "wrestlingmindset.com is verified."
+        )
+    elif not verified:
+        result["note"] = (
+            "API key works but no verified domain yet. Set RESEND_SANDBOX_TO to your Resend "
+            "signup email for a no-DNS workaround."
+        )
+    return result
 
 
 def verify_smtp_connection() -> dict[str, Any]:
@@ -333,15 +371,25 @@ def send_lead_assignment_email(
     assignment: dict[str, Any],
 ) -> bool:
     """Send assignment email via Resend (HTTPS) or SMTP."""
-    to_email = _safe_str(rep.get("email"))
+    rep_email = _safe_str(rep.get("email"))
     transport = email_transport()
 
-    if not transport or not to_email:
+    if not transport:
         raise RuntimeError(
             "Email not configured. Set RESEND_API_KEY or SMTP_* variables on Railway."
         )
 
+    to_email, sandbox_banner = _resolve_delivery(rep_email)
+    if not to_email:
+        raise RuntimeError("Rep must have an email, or set RESEND_SANDBOX_TO for sandbox mode.")
+
     subject, text, html = build_assignment_email(row, rep, assignment)
+    if sandbox_banner:
+        subject = f"[Sandbox · for {rep.get('name', rep_email)}] {subject}"
+        text = f"{sandbox_banner}\n\n{text}"
+        html = (
+            f'<p style="background:#fff3cd;padding:10px;border-radius:6px;">{sandbox_banner}</p>{html}'
+        )
 
     if transport == "resend":
         _send_via_resend(to_email, subject, text, html)

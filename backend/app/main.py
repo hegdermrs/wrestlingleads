@@ -23,7 +23,7 @@ from .store import store
 from .train import train_model
 from .webhooks import router as webhooks_router
 from .routing_api import router as routing_router
-from .routing_notify import email_configured, email_transport
+from .routing_notify import email_configured, email_transport, resend_sandbox_enabled
 from .scoring_api import router as scoring_router
 
 load_dotenv()
@@ -78,6 +78,7 @@ def health() -> dict:
         "wufoo_secret_configured": bool(os.getenv("WUFOO_WEBHOOK_SECRET")),
         "smtp_configured": email_configured(),
         "email_transport": email_transport(),
+        "resend_sandbox": resend_sandbox_enabled(),
         "smtp_user": os.getenv("SMTP_USER", "").strip() or None,
     }
 
