@@ -4,3 +4,9 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 restartPolicyType = "ON_FAILURE"
+
+# Persist scored leads, routing rules, and webhook log across redeploys.
+# In Railway: attach this volume to the API service if not auto-linked.
+[[deploy.volumes]]
+mountPath = "/app/data"
+name = "leads-data"
