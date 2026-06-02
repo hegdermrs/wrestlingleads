@@ -313,6 +313,22 @@ td {
   color: #94a3b8;
 }
 
+.compare-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  color: #a9b4cc;
+}
+
+.compare-stats span {
+  background: #151d33;
+  border: 1px solid #24304f;
+  border-radius: 8px;
+  padding: 0.35rem 0.65rem;
+}
+
 .score-progress {
   margin-top: 1rem;
   padding: 0.85rem 1rem;

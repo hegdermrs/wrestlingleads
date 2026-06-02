@@ -15,13 +15,12 @@ from .config import (
     TIER_THRESHOLDS,
 )
 from .features import (
-    INCOMPLETE_PROFILE_MAX_SCORE,
     _normalize_hubspot_score,
     _safe_str,
     has_coaching_signals,
-    is_incomplete_profile,
     is_sparse_subscriber,
 )
+from .reference_scores import apply_reference_stability
 from .llm import score_leads_with_llm_async
 from .progress import ProgressCallback, emit_progress
 from .train import load_model, predict_ml_scores
@@ -198,13 +197,9 @@ async def score_dataframe_async(
             final = max(0.0, min(100.0, final))
 
             cap_reason: str | None = None
-            if is_incomplete_profile(row) or is_sparse_subscriber(row):
-                final = min(final, INCOMPLETE_PROFILE_MAX_SCORE)
-                cap_reason = (
-                    "Cap: sparse subscriber (email-only)"
-                    if is_sparse_subscriber(row)
-                    else "Cap: incomplete profile"
-                )
+            final, stability_reason = apply_reference_stability(final, row)
+            if stability_reason:
+                cap_reason = stability_reason
 
             tier = _score_to_tier(final)
 

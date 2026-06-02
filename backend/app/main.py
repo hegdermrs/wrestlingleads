@@ -69,6 +69,8 @@ def health() -> dict:
         "llm_provider": "deepseek",
         "llm_configured": bool(os.getenv(DEEPSEEK_API_KEY_ENV)),
         "cache_loaded": store.loaded,
+        "baseline_loaded": store.baseline_loaded,
+        "wufoo_secret_configured": bool(os.getenv("WUFOO_WEBHOOK_SECRET")),
     }
 
 
@@ -228,6 +230,104 @@ async def score_upload(
     }
 
 
+@app.get("/dashboard/compare/summary")
+def dashboard_compare_summary() -> dict:
+    return store.get_compare_summary()
+
+
+@app.get("/dashboard/export-compare")
+def dashboard_export_compare(tier: str | None = Query(default=None)) -> StreamingResponse:
+    if not store.loaded:
+        raise HTTPException(status_code=404, detail="No scored leads loaded.")
+    if not store.baseline_loaded:
+        raise HTTPException(
+            status_code=404,
+            detail="No baseline export loaded. Upload previous qualified.xlsx under Compare in Settings.",
+        )
+
+    try:
+        export_df = store.export_compare_dataframe(tier=tier)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    buffer = io.BytesIO()
+    export_df.to_excel(buffer, index=False, engine="openpyxl")
+    buffer.seek(0)
+
+    suffix = "all" if not tier or tier.lower() == "all" else tier.lower()
+    filename = f"leads_{suffix}_tier_compare.xlsx"
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/settings/import-baseline")
+async def import_baseline(file: UploadFile = File(...)) -> dict:
+    """Store previous qualified export for tier comparison (does not replace current cache)."""
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file uploaded.")
+
+    try:
+        df = pd.read_excel(io.BytesIO(content), engine="openpyxl")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to parse file: {exc}") from exc
+
+    if "AI Tier" not in df.columns:
+        raise HTTPException(status_code=400, detail="File must include AI Tier column.")
+
+    try:
+        store.save_baseline(df, source=file.filename or "baseline.xlsx")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "message": "Baseline export saved for tier comparison and reference scoring",
+        "row_count": len(df),
+        "summary": store.get_compare_summary(),
+    }
+
+
+@app.post("/settings/run-tier-report")
+async def run_tier_report(file: UploadFile = File(...)) -> StreamingResponse:
+    """Upload old qualified.xlsx and download full Hot tier comparison report vs current cache."""
+    if not store.loaded:
+        raise HTTPException(status_code=404, detail="No current scored leads in cache.")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file uploaded.")
+
+    try:
+        old_df = pd.read_excel(io.BytesIO(content), engine="openpyxl")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to parse file: {exc}") from exc
+
+    from io import BytesIO
+
+    from .tier_compare import export_comparison_report
+
+    result = export_comparison_report(old_df=old_df, new_df=store.get_all_scored_df())
+    report_path = Path(result["output_path"])
+    return StreamingResponse(
+        BytesIO(report_path.read_bytes()),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{report_path.name}"'},
+    )
+
+
+@app.post("/settings/purge-test-leads")
+def purge_test_leads() -> dict:
+    """Remove integration-test rows (@example.com, etc.) from dashboard cache."""
+    removed = store.purge_synthetic_test_leads()
+    return {
+        "removed": removed,
+        "cache_row_count": len(store._df) if store._df is not None else 0,
+    }
+
+
 @app.post("/settings/import-qualified")
 async def import_qualified(file: UploadFile = File(...)) -> dict:
     content = await file.read()
@@ -246,6 +346,10 @@ async def import_qualified(file: UploadFile = File(...)) -> dict:
         )
 
     store.save(df, source=file.filename or "qualified.xlsx", note="Imported pre-scored file")
+
+    from .reference_scores import save_reference
+
+    save_reference(df)
     return {
         "message": "Qualified leads imported to dashboard cache",
         "summary": metrics_summary(df),

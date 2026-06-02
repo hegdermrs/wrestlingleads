@@ -14,6 +14,8 @@ from .scorer import metrics_summary
 
 CACHE_PARQUET = DATA_DIR / "scored_cache.parquet"
 CACHE_META = DATA_DIR / "scored_cache_meta.json"
+BASELINE_PARQUET = DATA_DIR / "baseline_qualified.parquet"
+BASELINE_META = DATA_DIR / "baseline_qualified_meta.json"
 QUALIFIED_FALLBACK = DATA_DIR / "qualified.xlsx"
 ROOT_QUALIFIED = BASE_DIR / "qualified.xlsx"
 
@@ -36,11 +38,58 @@ DISPLAY_COLUMNS = [
     "Create Date",
 ]
 
+# Dev/integration test rows — never show in Recent or keep in cache after restart
+_SYNTHETIC_TEST_EMAILS = frozenset(
+    {
+        "webhook-test-leads@example.com",
+        "wufoo-form-test@example.com",
+    }
+)
+_SYNTHETIC_TEST_RECORD_IDS = frozenset({"99999901", "99999902"})
+
 
 def _safe_str(value: object) -> str:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return ""
     return str(value).strip()
+
+
+def _norm_email(value: object) -> str:
+    return _safe_str(value).lower()
+
+
+def is_synthetic_test_lead(row: pd.Series | dict[str, Any]) -> bool:
+    get = row.get if isinstance(row, dict) else row.get
+    email = _norm_email(get("Email", ""))
+    if email in _SYNTHETIC_TEST_EMAILS or email.endswith("@example.com"):
+        return True
+    record_id = _safe_str(get("Record ID", ""))
+    return record_id in _SYNTHETIC_TEST_RECORD_IDS
+
+
+def _parse_create_date(series: pd.Series) -> pd.Series:
+    if series is None or series.empty:
+        return pd.Series(dtype="datetime64[ns]")
+    return pd.to_datetime(series.astype(str).replace("", pd.NA), errors="coerce")
+
+
+def _sort_dashboard_newest(df: pd.DataFrame) -> pd.DataFrame:
+    """Newest leads first — Wufoo appends must be visible on page 1."""
+    if df.empty:
+        return df
+    out = df.copy()
+    if "Create Date" in out.columns:
+        out["_sort_ts"] = _parse_create_date(out["Create Date"])
+    else:
+        out["_sort_ts"] = pd.NaT
+    # Fallback: last rows in cache are usually the most recently appended
+    out["_append_order"] = range(len(out))
+    out = out.sort_values(
+        ["_sort_ts", "_append_order"],
+        ascending=[False, False],
+        na_position="last",
+    )
+    return out.drop(columns=["_sort_ts", "_append_order"], errors="ignore")
 
 
 def _is_customer(row: pd.Series | dict[str, Any]) -> bool:
@@ -55,25 +104,57 @@ class ScoredLeadsStore:
     def __init__(self) -> None:
         self._df: pd.DataFrame | None = None
         self._meta: dict[str, Any] = {}
+        self._baseline_df: pd.DataFrame | None = None
+        self._baseline_meta: dict[str, Any] = {}
 
     @property
     def loaded(self) -> bool:
         return self._df is not None and not self._df.empty
 
+    @property
+    def baseline_loaded(self) -> bool:
+        return self._baseline_df is not None and not self._baseline_df.empty
+
     def load_on_startup(self) -> None:
         if CACHE_PARQUET.exists():
             self._df = pd.read_parquet(CACHE_PARQUET)
             self._meta = self._read_meta()
-            return
+        else:
+            for path in (QUALIFIED_FALLBACK, ROOT_QUALIFIED):
+                if path.exists() and self._load_qualified_file(path):
+                    break
 
-        for path in (QUALIFIED_FALLBACK, ROOT_QUALIFIED):
-            if path.exists() and self._load_qualified_file(path):
-                return
+        if BASELINE_PARQUET.exists():
+            self._baseline_df = pd.read_parquet(BASELINE_PARQUET)
+            self._baseline_meta = self._read_baseline_meta()
+
+        self.purge_synthetic_test_leads()
+
+    def purge_synthetic_test_leads(self) -> int:
+        """Remove integration-test rows from cache (e.g. @example.com webhook probes)."""
+        if self._df is None or self._df.empty:
+            return 0
+        mask = self._df.apply(is_synthetic_test_lead, axis=1)
+        removed = int(mask.sum())
+        if removed:
+            self._df = self._df[~mask].reset_index(drop=True)
+            self._meta["row_count"] = len(self._df)
+            self._persist()
+        return removed
 
     def _read_meta(self) -> dict[str, Any]:
         if CACHE_META.exists():
             return json.loads(CACHE_META.read_text(encoding="utf-8"))
         return {}
+
+    def _read_baseline_meta(self) -> dict[str, Any]:
+        if BASELINE_META.exists():
+            return json.loads(BASELINE_META.read_text(encoding="utf-8"))
+        return {}
+
+    def _write_baseline_meta(self) -> None:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        BASELINE_META.write_text(json.dumps(self._baseline_meta, indent=2), encoding="utf-8")
 
     def _write_meta(self) -> None:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -94,6 +175,69 @@ class ScoredLeadsStore:
             return False
         self.save(df, source=str(path.name), note="Loaded pre-scored qualified export")
         return True
+
+    def save_baseline(self, df: pd.DataFrame, source: str = "baseline.xlsx") -> None:
+        """Store previous export for tier comparison and reference scoring anchors."""
+        if "AI Tier" not in df.columns:
+            raise ValueError("Baseline file must include AI Tier column.")
+        self._baseline_df = df.copy()
+        self._baseline_meta = {
+            "source": source,
+            "saved_at": datetime.now(UTC).isoformat(),
+            "row_count": len(df),
+        }
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        self._baseline_df.to_parquet(BASELINE_PARQUET, index=False)
+        self._write_baseline_meta()
+
+        from .reference_scores import save_reference
+
+        save_reference(df)
+
+    def get_compare_summary(self) -> dict[str, Any]:
+        from .tier_compare import build_tier_comparison, summarize_comparison
+
+        if not self.loaded or not self.baseline_loaded:
+            return {"loaded": False, "baseline_loaded": self.baseline_loaded, "cache_loaded": self.loaded}
+
+        compared = build_tier_comparison(self._baseline_df, self._df)  # type: ignore[arg-type]
+        summary = summarize_comparison(compared)
+        return {
+            "loaded": True,
+            "baseline_loaded": True,
+            "baseline_source": self._baseline_meta.get("source"),
+            **summary,
+        }
+
+    def export_compare_dataframe(self, tier: str | None = None) -> pd.DataFrame:
+        from .tier_compare import REVIEW_COLUMNS, build_tier_comparison
+
+        if not self.loaded:
+            raise ValueError("No scored leads in cache.")
+        if not self.baseline_loaded:
+            raise ValueError("No baseline export loaded. Upload previous qualified.xlsx in Settings.")
+
+        compared = build_tier_comparison(self._baseline_df, self._df)  # type: ignore[arg-type]
+        if tier and tier.lower() != "all":
+            compared = compared[compared["AI Tier"].astype(str).str.strip() == tier]
+
+        front = [
+            "Email",
+            "First Name",
+            "Last Name",
+            "Lifecycle Stage",
+            "Previous AI Tier",
+            "AI Tier",
+            "Tier Change",
+            "Previous AI Score",
+            "AI Score",
+            "Score Delta",
+            "Hot Change Bucket",
+            "Change Tag",
+            "AI Reasons",
+        ] + REVIEW_COLUMNS
+        cols = [c for c in front if c in compared.columns] + [c for c in compared.columns if c not in front]
+        return compared[cols].copy()
 
     def _dashboard_df(self) -> pd.DataFrame:
         """Leads shown on dashboard — excludes Customers (training data only)."""
@@ -250,6 +394,7 @@ class ScoredLeadsStore:
                     mask |= filtered[col].astype(str).str.lower().str.contains(q, na=False)
             filtered = filtered[mask]
 
+        filtered = _sort_dashboard_newest(filtered)
         total = len(filtered)
         start = max(0, (page - 1) * limit)
         page_df = filtered.iloc[start : start + limit]
@@ -267,9 +412,18 @@ class ScoredLeadsStore:
         if dashboard.empty:
             return []
 
-        recent = dashboard.tail(limit).iloc[::-1]
+        dashboard = dashboard[~dashboard.apply(is_synthetic_test_lead, axis=1)]
+        if dashboard.empty:
+            return []
+
+        recent = _sort_dashboard_newest(dashboard).head(limit)
         cols = [c for c in DISPLAY_COLUMNS if c in recent.columns]
         return recent[cols].fillna("").to_dict(orient="records")
+
+    def get_all_scored_df(self) -> pd.DataFrame:
+        if not self.loaded or self._df is None:
+            raise ValueError("No scored leads in cache.")
+        return self._df.copy()
 
     def export_dataframe(self, tier: str | None = None) -> pd.DataFrame:
         if not self.loaded:

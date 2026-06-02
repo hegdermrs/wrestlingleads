@@ -21,6 +21,7 @@ from .config import (
     TIER_THRESHOLDS,
 )
 from .train import train_model
+from .reference_scores import save_reference
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "data"
@@ -208,7 +209,7 @@ def build_wufoo_config() -> dict:
     }
 
 
-def build_ai_manifest(df: pd.DataFrame, metrics: dict, few_shot: list[dict]) -> dict:
+def build_ai_manifest(df: pd.DataFrame, metrics: dict, few_shot: list[dict], reference_path: Path) -> dict:
     return {
         "generated_at": datetime.now(UTC).isoformat(),
         "qualified_rows": len(df),
@@ -219,6 +220,7 @@ def build_ai_manifest(df: pd.DataFrame, metrics: dict, few_shot: list[dict]) -> 
             "metrics": str(METRICS_PATH.relative_to(BASE_DIR)),
             "scoring_config": "models/scoring_config.json",
             "tier_calibration": "models/tier_calibration.json",
+            "reference_scores": str(reference_path.relative_to(BASE_DIR)).replace("\\", "/"),
             "hubspot_config": "config/hubspot_field_map.json",
             "wufoo_config": "config/wufoo_field_map.json",
         },
@@ -255,6 +257,8 @@ def build_all(qualified_path: Path | None = None) -> dict:
         json.dumps(tier_calibration, indent=2), encoding="utf-8"
     )
 
+    reference_path = save_reference(df)
+
     hubspot_config = build_hubspot_config()
     (CONFIG_DIR / "hubspot_field_map.json").write_text(
         json.dumps(hubspot_config, indent=2), encoding="utf-8"
@@ -265,7 +269,7 @@ def build_all(qualified_path: Path | None = None) -> dict:
         json.dumps(wufoo_config, indent=2), encoding="utf-8"
     )
 
-    manifest = build_ai_manifest(df, metrics, few_shot)
+    manifest = build_ai_manifest(df, metrics, few_shot, reference_path)
     (MODELS_DIR / "ai_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
     return manifest

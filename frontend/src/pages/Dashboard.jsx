@@ -76,6 +76,12 @@ export default function Dashboard() {
     refresh();
   }, [refresh]);
 
+  // Poll for new Wufoo leads (webhook scores in background ~30s)
+  useEffect(() => {
+    const interval = setInterval(refresh, 45_000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
   const handleExport = async () => {
     try {
       const params = tier !== "All" ? `?tier=${tier}` : "";
@@ -168,8 +174,9 @@ export default function Dashboard() {
       <section className="panel">
         <h3>Recent Incoming Leads</h3>
         <p className="muted">
-          Wufoo submissions appear here automatically once webhook is configured at{" "}
-          <code>/webhooks/wufoo</code>
+          New Wufoo submissions show here first (often <strong>Warm</strong>, not Hot).
+          Check tier <strong>All</strong> or search by email. Configure webhook in{" "}
+          <a href="/settings">Settings</a>.
         </p>
         {recent.length === 0 ? (
           <p className="muted">No recent leads yet.</p>

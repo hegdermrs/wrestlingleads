@@ -223,3 +223,62 @@ export async function uploadScoreFile(file, useLlm, onProgress) {
     "Scoring may still be running on the server. Refresh Dashboard in a few minutes."
   );
 }
+
+export async function fetchCompareSummary() {
+  try {
+    return await fetchJson("/dashboard/compare/summary");
+  } catch {
+    return { loaded: false };
+  }
+}
+
+export async function uploadBaseline(file) {
+  return uploadFile("/settings/import-baseline", file);
+}
+
+export async function downloadCompareExport(tier = "All") {
+  const params = tier !== "All" ? `?tier=${encodeURIComponent(tier)}` : "";
+  const url = `${API_URL}/dashboard/export-compare${params}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text();
+    let detail = "Compare export failed";
+    try {
+      detail = JSON.parse(text).detail || detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  const blob = await res.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = `leads_${tier.toLowerCase()}_tier_compare.xlsx`;
+  link.click();
+  window.URL.revokeObjectURL(blobUrl);
+}
+
+export async function downloadTierReport(file) {
+  const url = `${API_URL}/settings/run-tier-report`;
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(url, { method: "POST", body: form });
+  if (!res.ok) {
+    const text = await res.text();
+    let detail = "Tier report failed";
+    try {
+      detail = JSON.parse(text).detail || detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  const blob = await res.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = "hot_tier_comparison.xlsx";
+  link.click();
+  window.URL.revokeObjectURL(blobUrl);
+}

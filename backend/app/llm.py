@@ -28,7 +28,7 @@ Score each lead 0-100 based on:
 - Fit for 1-on-1 mental coaching (not team-only or wrong sport)
 - Specificity of pain points (nerves, choking, confidence, mindset)
 - Purchase intent and readiness
-- Athlete level appropriateness (youth through college)
+- Athlete level appropriateness for middle school and high school wrestlers (core ICP)
 
 IMPORTANT: If the lead has no message, job title, goals, or other coaching context (email-only record),
 score 15-25 maximum. Do not infer intent from lifecycle stage alone.

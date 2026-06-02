@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from .integrations.wufoo import wufoo_payload_to_lead_row
-from .store import store
+from .store import is_synthetic_test_lead, store
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
@@ -58,6 +58,25 @@ async def _score_wufoo_lead(row: dict[str, Any], use_llm: bool) -> None:
         logger.exception("Wufoo background scoring failed for email=%s", row.get("Email"))
 
 
+@router.get("/wufoo/status")
+def wufoo_webhook_status() -> dict[str, Any]:
+    """Diagnostics for Wufoo integration (does not expose secrets)."""
+    from .integrations.wufoo import WOOFOO_MAP_PATH, load_wufoo_map
+
+    field_map = load_wufoo_map()
+    secret = os.getenv("WUFOO_WEBHOOK_SECRET")
+    return {
+        "webhook_path": "/webhooks/wufoo",
+        "secret_configured": bool(secret),
+        "field_map_loaded": bool(field_map),
+        "field_map_path": str(WOOFOO_MAP_PATH),
+        "mapped_field_count": len(field_map),
+        "cache_loaded": store.loaded,
+        "cache_row_count": int(store._meta.get("row_count", 0)) if store.loaded else 0,
+        "last_scored_at": store._meta.get("last_append") or store._meta.get("scored_at") if store.loaded else None,
+    }
+
+
 @router.post("/wufoo")
 async def wufoo_webhook(
     request: Request,
@@ -79,6 +98,9 @@ async def wufoo_webhook(
     _verify_wufoo_secret(request, payload)
 
     row = wufoo_payload_to_lead_row(payload)
+    if is_synthetic_test_lead(row):
+        raise HTTPException(status_code=400, detail="Synthetic test submissions are not stored.")
+
     if not row.get("Email") and not row.get("Message"):
         from .integrations.wufoo import WOOFOO_MAP_PATH, load_wufoo_map
 
