@@ -10,33 +10,37 @@
       "name": "Gene Zannetti",
       "email": "genezannetti@gmail.com",
       "bucket": "urgent",
+      "role_label": "Urgent — Gene",
       "weekly_cap": 2,
-      "description": "Red-hot urgent leads (~1–2/week)"
+      "description": "Red-hot leads ready to start (~2 per week)"
     },
     {
       "id": "jake",
       "name": "Jake Hunter",
       "email": "jthunter600@gmail.com",
       "bucket": "hot_warm",
+      "role_label": "Hot & warm — Jake",
       "weekly_cap": 5,
-      "description": "Very warm / Hot leads (~5/week)"
+      "description": "Strong leads worth fast outreach (~5 per week)"
     },
     {
       "id": "beau",
       "name": "Beau Tillman",
       "email": "beautillman80@gmail.com",
       "bucket": "general",
+      "role_label": "General — Beau",
       "weekly_cap": null,
-      "description": "General pool (Central time)"
+      "description": "Shared pool; Eric gets West Coast first"
     },
     {
       "id": "eric",
       "name": "Eric Spencer",
       "email": "evspencer@gmail.com",
       "bucket": "general",
+      "role_label": "General — Eric",
       "weekly_cap": null,
       "west_coast_priority": true,
-      "description": "General pool — West Coast priority"
+      "description": "Shared pool — West Coast leads first"
     }
   ]
 }

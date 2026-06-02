@@ -47,6 +47,7 @@ export default function Settings() {
       const data = await uploadFile("/settings/import-qualified", qualifiedFile);
       setMessage(`Loaded ${data.row_count?.toLocaleString()} leads — open Leads to view.`);
       checkHealth().then(setHealth);
+      fetchJson("/webhooks/wufoo/status").then(setWufooStatus).catch(() => null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -65,6 +66,7 @@ export default function Settings() {
       const count = data.row_count ?? data.summary?.total_leads ?? "?";
       setMessage(`Done! ${count} leads scored and ready in your inbox.`);
       checkHealth().then(setHealth);
+      fetchJson("/webhooks/wufoo/status").then(setWufooStatus).catch(() => null);
     } catch (err) {
       setError(err.message);
       setScoreProgress(null);
@@ -75,15 +77,20 @@ export default function Settings() {
 
   const copyWebhook = () => {
     navigator.clipboard?.writeText(WEBHOOK_URL);
-    setMessage("Webhook link copied!");
+    setMessage("Link copied!");
   };
+
+  const formConnected = wufooStatus?.secret_configured;
+  const hasLeads = (wufooStatus?.cache_row_count ?? 0) > 0;
 
   return (
     <>
       <div className="page-intro animate-fade-in">
         <div>
           <h1 className="page-title">Setup</h1>
-          <p className="page-subtitle">Import your list, connect your form, and you're live.</p>
+          <p className="page-subtitle">
+            Your website form sends leads in automatically. File uploads are only if you need a one-time import.
+          </p>
         </div>
         <div className={`status-pill ${health?.status === "ok" ? "ok" : "warn"}`}>
           {health?.status === "ok" ? "● System online" : "○ Offline"}
@@ -93,86 +100,142 @@ export default function Settings() {
       <Toast type="success" message={message} />
       <Toast type="error" message={error} />
 
-      <Card title="Step 1 — Load your leads" subtitle="Fastest: import a file you've already scored" delay={60}>
-        <p className="card-copy">
-          Have an Excel export with scores already? Upload it here — shows up instantly in{" "}
-          <Link to="/">Leads</Link>.
-        </p>
-        <label className="file-drop">
-          <input type="file" accept=".xlsx" onChange={(e) => setQualifiedFile(e.target.files?.[0] || null)} />
-          <span>{qualifiedFile ? qualifiedFile.name : "Choose Excel file (.xlsx)"}</span>
-        </label>
-        <button type="button" className="btn" onClick={handleImportQualified} disabled={loading || !qualifiedFile}>
-          Import leads
-        </button>
-      </Card>
-
-      <Card title="Step 2 — Connect your form" subtitle="Wufoo sends new submissions automatically" delay={100}>
-        <div className="steps-list">
-          <div className="step-item">
-            <span className="step-num">1</span>
-            <p>In Wufoo → your form → <strong>Integrations → WebHook</strong></p>
+      {wufooStatus && (
+        <Card delay={40} className="setup-status-card">
+          <div className="setup-status-head">
+            <h3 className="setup-status-title">Right now</h3>
+            <p className="setup-status-desc">
+              {formConnected && hasLeads
+                ? "Form is connected and leads are flowing."
+                : formConnected
+                  ? "Form is connected — waiting for the first submission."
+                  : "Form connection still needs to be finished in Wufoo."}
+            </p>
           </div>
-          <div className="step-item">
-            <span className="step-num">2</span>
-            <p>Paste this URL:</p>
-            <div className="copy-row">
-              <code className="copy-code">{WEBHOOK_URL}</code>
-              <button type="button" className="btn secondary small" onClick={copyWebhook}>
-                Copy
-              </button>
-            </div>
-          </div>
-          <div className="step-item">
-            <span className="step-num">3</span>
-            <p>Set the Handshake Key to match what your admin configured on the server</p>
-          </div>
-        </div>
-        {wufooStatus && (
           <div className="status-grid">
-            <div className={`status-tile ${wufooStatus.secret_configured ? "ok" : "warn"}`}>
-              <span>Form security</span>
-              <strong>{wufooStatus.secret_configured ? "Connected" : "Needs setup"}</strong>
+            <div className={`status-tile ${formConnected ? "ok" : "warn"}`}>
+              <span>Website form</span>
+              <strong>{formConnected ? "Connected" : "Not connected"}</strong>
             </div>
-            <div className="status-tile ok">
-              <span>Leads loaded</span>
-              <strong>{wufooStatus.cache_row_count?.toLocaleString() ?? "—"}</strong>
+            <div className={`status-tile ${hasLeads ? "ok" : ""}`}>
+              <span>Leads in system</span>
+              <strong>{wufooStatus.cache_row_count?.toLocaleString() ?? "0"}</strong>
             </div>
             <div className="status-tile">
               <span>Last new lead</span>
               <strong>
                 {wufooStatus.last_scored_at
                   ? new Date(wufooStatus.last_scored_at).toLocaleString()
-                  : "—"}
+                  : "None yet"}
               </strong>
             </div>
           </div>
-        )}
+        </Card>
+      )}
+
+      <Card
+        title="Website form"
+        subtitle="One-time setup in Wufoo — after this, every submission shows up in Leads"
+        delay={80}
+      >
+        <p className="card-copy">
+          This is how day-to-day leads come in. You only do this once. After that, check{" "}
+          <Link to="/">Leads</Link> and <Link to="/team">Team</Link> — no uploads needed.
+        </p>
+
+        <div className="steps-list">
+          <div className="step-item">
+            <span className="step-num">1</span>
+            <p>
+              Open your form in Wufoo → <strong>Integrations</strong> → <strong>WebHook</strong>
+            </p>
+          </div>
+          <div className="step-item">
+            <span className="step-num">2</span>
+            <div>
+              <p>Paste this link into the WebHook URL field:</p>
+              <div className="copy-row">
+                <code className="copy-code">{WEBHOOK_URL}</code>
+                <button type="button" className="btn secondary small" onClick={copyWebhook}>
+                  Copy
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="step-item">
+            <span className="step-num">3</span>
+            <p>
+              Set the <strong>Handshake Key</strong> to the value your admin gave you (must match the server).
+            </p>
+          </div>
+        </div>
+
         <p className="field-hint">
-          New submissions appear in <Link to="/">Leads</Link> within ~30 seconds, then route to your team in{" "}
+          New submissions appear in <Link to="/">Leads</Link> within about 30 seconds, then get routed on{" "}
           <Link to="/team">Team</Link>.
         </p>
       </Card>
 
-      <Card title="Step 3 — Score a fresh HubSpot export" subtitle="Optional — takes ~10 minutes for 2,000 leads" delay={140}>
-        <label className="file-drop">
-          <input type="file" accept=".xlsx,.csv" onChange={(e) => setScoreFile(e.target.files?.[0] || null)} />
-          <span>{scoreFile ? scoreFile.name : "Choose HubSpot export (.xlsx or .csv)"}</span>
-        </label>
-        <Toggle
-          checked={useLlm}
-          onChange={setUseLlm}
-          label="Use AI text scoring"
-          description="Recommended — reads each lead's message for better accuracy"
-        />
-        <button type="button" className="btn" onClick={handleScore} disabled={loading || !scoreFile}>
-          {loading ? "Scoring…" : "Score & save"}
-        </button>
-        <ScoreProgress progress={scoreProgress} />
+      <Card delay={120}>
+        <Accordion title="Upload a spreadsheet" subtitle="Optional — one-time import, not needed if the form is working">
+          <p className="card-copy">
+            Use this only when you want to bulk-load leads from a file instead of (or before) live form submissions.
+          </p>
+
+          <div className="setup-option">
+            <div className="setup-option-head">
+              <span className="setup-option-icon">📊</span>
+              <div>
+                <h4 className="setup-option-title">Already have scores?</h4>
+                <p className="setup-option-desc">Import a finished Excel export — shows up instantly in Leads.</p>
+              </div>
+            </div>
+            <label className="file-drop">
+              <input type="file" accept=".xlsx" onChange={(e) => setQualifiedFile(e.target.files?.[0] || null)} />
+              <span>{qualifiedFile ? qualifiedFile.name : "Choose Excel file (.xlsx)"}</span>
+            </label>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={handleImportQualified}
+              disabled={loading || !qualifiedFile}
+            >
+              Import leads
+            </button>
+          </div>
+
+          <div className="setup-option-divider" />
+
+          <div className="setup-option">
+            <div className="setup-option-head">
+              <span className="setup-option-icon">🔄</span>
+              <div>
+                <h4 className="setup-option-title">Raw HubSpot export?</h4>
+                <p className="setup-option-desc">
+                  Upload an unscored file and we'll score it with AI (~10 minutes for 2,000 leads).
+                </p>
+              </div>
+            </div>
+            <label className="file-drop">
+              <input type="file" accept=".xlsx,.csv" onChange={(e) => setScoreFile(e.target.files?.[0] || null)} />
+              <span>{scoreFile ? scoreFile.name : "Choose HubSpot export (.xlsx or .csv)"}</span>
+            </label>
+            <Toggle
+              checked={useLlm}
+              onChange={setUseLlm}
+              label="Use AI text scoring"
+              description="Recommended — reads each lead's message for better accuracy"
+            />
+            <button type="button" className="btn" onClick={handleScore} disabled={loading || !scoreFile}>
+              {loading ? "Scoring…" : "Score & save"}
+            </button>
+            <ScoreProgress progress={scoreProgress} />
+          </div>
+        </Accordion>
       </Card>
 
-      <Card delay={180}>
-        <Accordion title="Advanced — compare old vs new Hot list" subtitle="For calibration reviews">
+      <Card delay={160}>
+        <Accordion title="Advanced — compare old vs new priority list" subtitle="For calibration reviews">
           {compareSummary?.loaded && (
             <div className="compare-pills">
               <span>Still priority: {compareSummary.still_hot}</span>

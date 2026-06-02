@@ -645,8 +645,48 @@ a {
 .team-card-head {
   display: flex;
   gap: 0.75rem;
-  align-items: center;
-  margin-bottom: 0.5rem;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.team-card-fields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field-label.compact {
+  gap: 0.2rem;
+}
+
+.team-role-input {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.team-name-input {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.team-desc-input {
+  resize: vertical;
+  min-height: 2.75rem;
+  line-height: 1.45;
+}
+
+.cap-input {
+  max-width: 140px;
+}
+
+.team-card-toggle {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
 }
 
 .team-avatar {
@@ -669,19 +709,7 @@ a {
 }
 
 .team-name-input {
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  border-radius: 0;
-  padding: 0.25rem 0;
-  font-size: 1.15rem;
-  font-weight: 700;
   width: 100%;
-}
-
-.team-name-input:focus {
-  box-shadow: none;
-  border-color: var(--accent);
 }
 
 .team-hint {
@@ -859,6 +887,57 @@ a {
 
 .status-tile.warn strong {
   color: var(--warm);
+}
+
+/* Setup page */
+.setup-status-head {
+  margin-bottom: 1rem;
+}
+
+.setup-status-title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.setup-status-desc {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.setup-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.setup-option-head {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.setup-option-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+  margin-top: 0.15rem;
+}
+
+.setup-option-title {
+  margin: 0 0 0.2rem;
+  font-size: 0.95rem;
+}
+
+.setup-option-desc {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.setup-option-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 1.25rem 0;
 }
 
 .status-pill {

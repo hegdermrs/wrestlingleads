@@ -18,6 +18,21 @@ function repBucketClass(bucket) {
   return BUCKET_INFO[bucket]?.color || "rep-general";
 }
 
+function defaultRoleLabel(rep) {
+  return rep.role_label || BUCKET_INFO[rep.bucket]?.title || "Sales rep";
+}
+
+function defaultDescription(rep) {
+  return rep.description ?? BUCKET_INFO[rep.bucket]?.hint ?? "";
+}
+
+function parseWeeklyCap(value) {
+  if (value === "" || value == null) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.floor(n);
+}
+
 export default function Rules() {
   const [rules, setRules] = useState(null);
   const [stats, setStats] = useState(null);
@@ -66,8 +81,9 @@ export default function Rules() {
           .filter(Boolean),
         reps: (rules.reps || []).map((rep) => ({
           ...rep,
-          weekly_cap:
-            rep.weekly_cap === "" || rep.weekly_cap == null ? null : Number(rep.weekly_cap),
+          role_label: (rep.role_label || "").trim() || defaultRoleLabel({ ...rep, role_label: "" }),
+          description: (rep.description || "").trim() || defaultDescription({ ...rep, description: "" }),
+          weekly_cap: parseWeeklyCap(rep.weekly_cap),
         })),
       };
       const saved = await saveRoutingRules(payload);
@@ -176,11 +192,10 @@ export default function Rules() {
         />
       </Card>
 
-      <Card title="Your sales team" subtitle="Tap a card to edit — weekly counts reset each Monday" delay={100}>
+      <Card title="Your sales team" subtitle="Edit role, name, description, email, and weekly limit — save when done" delay={100}>
         <div className="team-grid">
           {(rules?.reps || []).map((rep, index) => {
-            const info = BUCKET_INFO[rep.bucket] || BUCKET_INFO.general;
-            const cap = rep.weekly_cap;
+            const cap = parseWeeklyCap(rep.weekly_cap);
             const count = weekly[rep.id] ?? 0;
             const capPct = cap ? Math.min(100, (count / cap) * 100) : null;
 
@@ -188,17 +203,39 @@ export default function Rules() {
               <div key={rep.id || index} className={`team-card ${repBucketClass(rep.bucket)} animate-slide-up`} style={{ animationDelay: `${index * 70}ms` }}>
                 <div className="team-card-head">
                   <div className="team-avatar">{rep.name?.charAt(0) || "?"}</div>
-                  <div>
-                    <p className="team-role">{info.title}</p>
-                    <input
-                      className="input team-name-input"
-                      value={rep.name || ""}
-                      onChange={(e) => updateRep(index, "name", e.target.value)}
-                      placeholder="Name"
-                    />
+                  <div className="team-card-fields">
+                    <label className="field-label compact">
+                      Role label
+                      <input
+                        className="input team-role-input"
+                        value={rep.role_label ?? ""}
+                        onChange={(e) => updateRep(index, "role_label", e.target.value)}
+                        placeholder={BUCKET_INFO[rep.bucket]?.title || "Sales rep"}
+                      />
+                    </label>
+                    <label className="field-label compact">
+                      Name
+                      <input
+                        className="input team-name-input"
+                        value={rep.name || ""}
+                        onChange={(e) => updateRep(index, "name", e.target.value)}
+                        placeholder="Full name"
+                      />
+                    </label>
                   </div>
                 </div>
-                <p className="team-hint">{info.hint}</p>
+
+                <label className="field-label">
+                  What leads they get
+                  <textarea
+                    className="input team-desc-input"
+                    rows={2}
+                    value={rep.description ?? ""}
+                    onChange={(e) => updateRep(index, "description", e.target.value)}
+                    placeholder={BUCKET_INFO[rep.bucket]?.hint || "What kinds of leads go here"}
+                  />
+                </label>
+
                 <label className="field-label">
                   Email
                   <input
@@ -206,9 +243,26 @@ export default function Rules() {
                     type="email"
                     value={rep.email || ""}
                     onChange={(e) => updateRep(index, "email", e.target.value)}
+                    placeholder="rep@email.com"
                   />
                 </label>
-                {cap != null && (
+
+                <label className="field-label">
+                  Weekly limit
+                  <input
+                    className="input cap-input"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={rep.weekly_cap ?? ""}
+                    onChange={(e) =>
+                      updateRep(index, "weekly_cap", e.target.value === "" ? null : e.target.value)
+                    }
+                    placeholder="No limit"
+                  />
+                </label>
+
+                {cap != null ? (
                   <div className="cap-meter">
                     <div className="cap-label">
                       This week: <strong>{count}</strong> of {cap}
@@ -217,12 +271,19 @@ export default function Rules() {
                       <div className="cap-fill" style={{ width: `${capPct}%` }} />
                     </div>
                   </div>
+                ) : (
+                  <p className="muted cap-open">{count} assigned this week · no limit set</p>
                 )}
-                {!cap && (
-                  <p className="muted cap-open">No weekly limit · {count} assigned this week</p>
-                )}
-                {rep.west_coast_priority && (
-                  <span className="region-tag">🌊 West Coast priority</span>
+
+                {rep.bucket === "general" && (
+                  <div className="team-card-toggle">
+                    <Toggle
+                      checked={!!rep.west_coast_priority}
+                      onChange={(v) => updateRep(index, "west_coast_priority", v)}
+                      label="West Coast priority"
+                      description="Gets leads from West Coast states first"
+                    />
+                  </div>
                 )}
               </div>
             );

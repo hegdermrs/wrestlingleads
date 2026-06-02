@@ -3,7 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 const NAV = [
   { to: "/", end: true, label: "Leads", desc: "Inbox & priorities" },
   { to: "/team", label: "Team", desc: "Who gets what" },
-  { to: "/setup", label: "Setup", desc: "Import & forms" },
+  { to: "/setup", label: "Setup", desc: "Form connection" },
 ];
 
 export default function AppShell() {
