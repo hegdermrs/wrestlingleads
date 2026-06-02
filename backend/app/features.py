@@ -18,6 +18,16 @@ from .config import CATEGORICAL_COLUMNS
 URGENT_DEADLINE_KEYWORDS = ("now", "asap", "immediately", "this week", "next week", "urgent")
 COACHING_SOURCE_MARKERS = ("wufoo", "1-1")
 INCOMPLETE_PROFILE_MAX_SCORE = 35.0
+ICP_PRIORITY_MIN_LLM = 85.0
+
+CORE_ICP_JOB_TITLES = (
+    "Parent Seeking 1-1 Coaching for Child",
+    "Wrestler Seeking 1-1 Coaching for Myself",
+)
+MENTAL_STRUGGLE_JOB_FUNCTIONS = (
+    "Struggling mentally",
+    "Mental Edge",
+)
 
 
 def _safe_str(value: object) -> str:
@@ -112,6 +122,46 @@ def is_sparse_subscriber(row: pd.Series | dict) -> bool:
 def is_incomplete_profile(row: pd.Series | dict) -> bool:
     """Email-only or minimal HubSpot record — not enough to qualify for coaching outreach."""
     return not has_coaching_signals(row) and not has_name(row)
+
+
+def is_ready_for_coaching(row: pd.Series | dict) -> bool:
+    get = row.get if isinstance(row, dict) else row.get
+    relationship = _safe_str(get("Relationship Status", "")).lower()
+    if "ready to start" in relationship:
+        return True
+    deadline = _safe_str(get("Deadline for Goal", "")).lower()
+    return any(keyword in deadline for keyword in URGENT_DEADLINE_KEYWORDS)
+
+
+def is_core_icp_buyer(row: pd.Series | dict) -> bool:
+    get = row.get if isinstance(row, dict) else row.get
+    job_title = _safe_str(get("Job Title", ""))
+    if any(title in job_title for title in CORE_ICP_JOB_TITLES):
+        return True
+    job_function = _safe_str(get("Job function", ""))
+    return any(marker in job_function for marker in MENTAL_STRUGGLE_JOB_FUNCTIONS)
+
+
+def qualifies_icp_priority_floor(row: pd.Series | dict, llm_score: float) -> bool:
+    """High-intent 1-on-1 coaching lead — ML should not demote below Priority."""
+    if llm_score < ICP_PRIORITY_MIN_LLM:
+        return False
+    if is_sparse_subscriber(row):
+        return False
+    if not has_coaching_signals(row):
+        return False
+    if not is_core_icp_buyer(row):
+        return False
+    if not is_ready_for_coaching(row):
+        return False
+
+    get = row.get if isinstance(row, dict) else row.get
+    job_title = _safe_str(get("Job Title", ""))
+    if "Coach Seeking Team Mindset Training" in job_title:
+        return False
+    if _safe_str(get("Lead Status", "")) == "Unqualified":
+        return False
+    return True
 
 
 def empty_profile_text_result() -> dict[str, Any]:
