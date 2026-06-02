@@ -12,17 +12,21 @@ from typing import Any
 
 import pandas as pd
 
-from .config import MODELS_DIR, TIER_THRESHOLDS
+from .config import MODELS_DIR
 from .features import INCOMPLETE_PROFILE_MAX_SCORE, _safe_str, has_coaching_signals, is_sparse_subscriber
+from .scoring_config import get_tier_thresholds
 
 REFERENCE_PATH = MODELS_DIR / "reference_scores.parquet"
 
-TIER_FLOORS = {
-    "Hot": float(TIER_THRESHOLDS["Hot"]),
-    "Warm": float(TIER_THRESHOLDS["Warm"]),
-    "Cold": float(TIER_THRESHOLDS["Cold"]),
-    "Unqualified": 0.0,
-}
+
+def tier_floors() -> dict[str, float]:
+    thresholds = get_tier_thresholds()
+    return {
+        "Hot": float(thresholds["Hot"]),
+        "Warm": float(thresholds["Warm"]),
+        "Cold": float(thresholds["Cold"]),
+        "Unqualified": 0.0,
+    }
 
 _reference_by_record_id: dict[str, dict[str, Any]] | None = None
 _reference_by_email: dict[str, dict[str, Any]] | None = None
@@ -160,7 +164,7 @@ def apply_reference_stability(
         return final, None
 
     ref_tier = _safe_str(ref.get("ai_tier", ""))
-    floor = TIER_FLOORS.get(ref_tier, 0.0)
+    floor = tier_floors().get(ref_tier, 0.0)
     if floor and final < floor:
         return floor, f"Reference stability: preserved {ref_tier} tier for coaching lead"
 

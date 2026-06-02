@@ -11,12 +11,21 @@ import {
   downloadTierReport,
   fetchCompareSummary,
   fetchJson,
+  fetchScoringRubric,
+  saveScoringRubric,
   uploadBaseline,
   uploadFile,
   uploadScoreFile,
 } from "../api.js";
+import { TIER_LABELS } from "../constants/labels.js";
 
 const WEBHOOK_URL = "https://wrestlingleads-production.up.railway.app/webhooks/wufoo";
+
+const RUBRIC_ROWS = [
+  { key: "Hot", label: TIER_LABELS.Hot.short, hint: TIER_LABELS.Hot.hint },
+  { key: "Warm", label: TIER_LABELS.Warm.short, hint: TIER_LABELS.Warm.hint },
+  { key: "Cold", label: TIER_LABELS.Cold.short, hint: TIER_LABELS.Cold.hint },
+];
 
 export default function Settings() {
   const [qualifiedFile, setQualifiedFile] = useState(null);
@@ -31,11 +40,18 @@ export default function Settings() {
   const [scoreProgress, setScoreProgress] = useState(null);
   const [compareSummary, setCompareSummary] = useState(null);
   const [wufooStatus, setWufooStatus] = useState(null);
+  const [rubric, setRubric] = useState({ Hot: 75, Warm: 50, Cold: 25 });
+  const [rubricSaving, setRubricSaving] = useState(false);
 
   useEffect(() => {
     checkHealth().then(setHealth);
     fetchJson("/webhooks/wufoo/status").then(setWufooStatus).catch(() => null);
     fetchCompareSummary().then(setCompareSummary).catch(() => null);
+    fetchScoringRubric()
+      .then((data) => {
+        if (data?.tiers) setRubric(data.tiers);
+      })
+      .catch(() => null);
   }, []);
 
   const handleImportQualified = async () => {
@@ -80,6 +96,30 @@ export default function Settings() {
     setMessage("Link copied!");
   };
 
+  const handleSaveRubric = async () => {
+    setRubricSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await saveScoringRubric({
+        Hot: Number(rubric.Hot),
+        Warm: Number(rubric.Warm),
+        Cold: Number(rubric.Cold),
+      });
+      if (result?.tiers) setRubric(result.tiers);
+      const relabeled = result?.leads_relabeled ?? 0;
+      setMessage(
+        relabeled > 0
+          ? `Scoring rubric saved — ${relabeled.toLocaleString()} leads re-labeled.`
+          : "Scoring rubric saved globally."
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRubricSaving(false);
+    }
+  };
+
   const formConnected = wufooStatus?.secret_configured;
   const hasLeads = (wufooStatus?.cache_row_count ?? 0) > 0;
 
@@ -99,6 +139,56 @@ export default function Settings() {
 
       <Toast type="success" message={message} />
       <Toast type="error" message={error} />
+
+      <Card
+        title="Scoring rubric"
+        subtitle="Minimum score for each tier — saved for all new and existing leads"
+        delay={20}
+      >
+        <p className="card-copy">
+          Leads are scored 0–100. Set the cutoffs below. Priority must be highest, then Good fit, then Low
+          priority.
+        </p>
+        <div className="rubric-grid">
+          {RUBRIC_ROWS.map((row) => (
+            <label key={row.key} className="rubric-row">
+              <span className="rubric-label">
+                <strong>{row.label}</strong>
+                <span className="muted">{row.hint}</span>
+              </span>
+              <div className="rubric-input-wrap">
+                <span className="rubric-prefix">≥</span>
+                <input
+                  className="input rubric-input"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={rubric[row.key] ?? ""}
+                  onChange={(e) =>
+                    setRubric((prev) => ({ ...prev, [row.key]: e.target.value }))
+                  }
+                />
+              </div>
+            </label>
+          ))}
+          <div className="rubric-row rubric-static">
+            <span className="rubric-label">
+              <strong>{TIER_LABELS.Unqualified.short}</strong>
+              <span className="muted">Below Low priority minimum</span>
+            </span>
+            <span className="muted rubric-auto">&lt; {rubric.Cold ?? 25}</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="btn"
+          onClick={handleSaveRubric}
+          disabled={rubricSaving}
+        >
+          {rubricSaving ? "Saving…" : "Save rubric"}
+        </button>
+      </Card>
 
       {wufooStatus && (
         <Card delay={40} className="setup-status-card">

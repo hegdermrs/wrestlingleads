@@ -449,6 +449,36 @@ class ScoredLeadsStore:
 
         return result
 
+    def reapply_tier_labels(self) -> int:
+        """Recompute AI Tier and Recommended Action from existing AI Score using current rubric."""
+        if not self.loaded or self._df is None or self._df.empty:
+            return 0
+
+        from .scorer import recommended_action, score_to_tier
+
+        updated = 0
+        for idx in self._df.index:
+            try:
+                score = float(self._df.at[idx, "AI Score"])
+            except (TypeError, ValueError):
+                continue
+
+            lifecycle = _safe_str(self._df.at[idx, "Lifecycle Stage"])
+            if lifecycle == "Customer":
+                tier = "Hot"
+            else:
+                tier = score_to_tier(score)
+
+            action = recommended_action(tier, lifecycle)
+            if _safe_str(self._df.at[idx, "AI Tier"]) != tier:
+                updated += 1
+            self._df.at[idx, "AI Tier"] = tier
+            self._df.at[idx, "Recommended Action"] = action
+
+        self._meta["scored_at"] = datetime.now(UTC).isoformat()
+        self._persist()
+        return updated
+
     def get_stats(self) -> dict[str, Any]:
         if not self.loaded:
             return {

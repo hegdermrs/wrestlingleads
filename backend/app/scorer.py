@@ -12,7 +12,6 @@ from .config import (
     LLM_WEIGHT,
     ML_WEIGHT,
     RULES_WEIGHT,
-    TIER_THRESHOLDS,
 )
 from .features import (
     _normalize_hubspot_score,
@@ -22,22 +21,24 @@ from .features import (
     qualifies_icp_priority_floor,
 )
 from .reference_scores import apply_reference_stability
+from .scoring_config import get_tier_thresholds
 from .llm import score_leads_with_llm_async
 from .progress import ProgressCallback, emit_progress
 from .train import load_model, predict_ml_scores
 
 
-def _score_to_tier(score: float) -> str:
-    if score >= TIER_THRESHOLDS["Hot"]:
+def score_to_tier(score: float) -> str:
+    thresholds = get_tier_thresholds()
+    if score >= thresholds["Hot"]:
         return "Hot"
-    if score >= TIER_THRESHOLDS["Warm"]:
+    if score >= thresholds["Warm"]:
         return "Warm"
-    if score >= TIER_THRESHOLDS["Cold"]:
+    if score >= thresholds["Cold"]:
         return "Cold"
     return "Unqualified"
 
 
-def _recommended_action(tier: str, lifecycle: str) -> str:
+def recommended_action(tier: str, lifecycle: str) -> str:
     if lifecycle == "Customer":
         return "Already converted — no outreach needed"
     if tier == "Hot":
@@ -126,7 +127,7 @@ def apply_icp_priority_floor(
     llm_score: float,
 ) -> tuple[float, str | None]:
     """Raise score to Hot threshold when text + ICP + readiness are strong."""
-    hot_floor = float(TIER_THRESHOLDS["Hot"])
+    hot_floor = float(get_tier_thresholds()["Hot"])
     if final >= hot_floor or not qualifies_icp_priority_floor(row, llm_score):
         return final, None
     return hot_floor, "ICP priority: high-intent coaching lead (text + readiness)"
@@ -192,7 +193,7 @@ async def score_dataframe_async(
             final = 100.0
             tier = "Hot"
             reasons = ["Already converted customer"]
-            action = _recommended_action(tier, lifecycle)
+            action = recommended_action(tier, lifecycle)
             rule_score = 100.0
         else:
             hubspot_raw = row.get("10-Point Lead Score")
@@ -218,7 +219,7 @@ async def score_dataframe_async(
             if icp_reason:
                 cap_reason = icp_reason
 
-            tier = _score_to_tier(final)
+            tier = score_to_tier(final)
 
             reason_parts = [
                 f"ML: {ml_scores[idx]:.0f}/100",
@@ -234,7 +235,7 @@ async def score_dataframe_async(
             if flags:
                 reason_parts.append("Flags: " + "; ".join(flags[:2]))
             reasons = reason_parts
-            action = _recommended_action(tier, lifecycle)
+            action = recommended_action(tier, lifecycle)
 
         ai_scores.append(round(final, 1))
         ai_tiers.append(tier)

@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
+import { signOut } from "../auth/AuthGate.jsx";
 
 const NAV = [
   { to: "/", end: true, label: "Leads", desc: "Inbox & priorities" },
@@ -30,6 +31,16 @@ export default function AppShell() {
             </NavLink>
           ))}
         </nav>
+        <button
+          type="button"
+          className="btn ghost sidebar-signout"
+          onClick={() => {
+            signOut();
+            window.location.reload();
+          }}
+        >
+          Sign out
+        </button>
       </aside>
 
       <div className="main-column">

@@ -14,6 +14,7 @@ data/baseline_qualified_meta.json
 data/score_jobs/
 data/reports/
 data/routing_config.json
+data/scoring_config.json
 data/routing_log.json
 data/webhook_recent_log.json
 

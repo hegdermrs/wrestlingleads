@@ -140,6 +140,14 @@ a {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  flex: 1;
+}
+
+.sidebar-signout {
+  margin-top: 1rem;
+  width: 100%;
+  justify-content: center;
+  font-size: 0.85rem;
 }
 
 .nav-item {
@@ -1447,6 +1455,107 @@ a {
 
 .animate-toast {
   animation: toast-in 0.35s ease both;
+}
+
+/* App login */
+.auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: radial-gradient(circle at top, rgba(99, 102, 241, 0.12), transparent 55%), var(--bg);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem 1.75rem;
+  box-shadow: var(--shadow);
+}
+
+.auth-brand {
+  margin-bottom: 1rem;
+}
+
+.auth-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+}
+
+.auth-sub {
+  margin: 0 0 1.25rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.auth-error {
+  margin: 0.65rem 0 0;
+  color: var(--hot);
+  font-size: 0.85rem;
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+/* Scoring rubric editor */
+.rubric-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0 1.25rem;
+}
+
+.rubric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.85rem;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.rubric-row.rubric-static {
+  opacity: 0.85;
+}
+
+.rubric-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.rubric-label strong {
+  font-size: 0.95rem;
+}
+
+.rubric-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.rubric-prefix {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.rubric-input {
+  width: 4.5rem;
+  text-align: right;
+}
+
+.rubric-auto {
+  font-size: 0.9rem;
 }
 
 /* Legacy compat */

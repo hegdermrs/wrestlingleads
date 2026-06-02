@@ -23,6 +23,7 @@ from .store import store
 from .train import train_model
 from .webhooks import router as webhooks_router
 from .routing_api import router as routing_router
+from .scoring_api import router as scoring_router
 
 load_dotenv()
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
@@ -30,6 +31,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 app = FastAPI(title="Leads Qualifier API", version="1.0.0")
 app.include_router(webhooks_router)
 app.include_router(routing_router)
+app.include_router(scoring_router)
 
 def _cors_origins() -> list[str]:
     raw = os.getenv("CORS_ORIGINS", "").strip()

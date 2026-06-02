@@ -310,3 +310,15 @@ export function sendRoute(email, { force = false, send_email = true } = {}) {
 export function sendUnrouted() {
   return fetchJson("/routing/send-unrouted", { method: "POST" });
 }
+
+export function fetchScoringRubric() {
+  return fetchJson("/scoring/rubric");
+}
+
+export function saveScoringRubric(tiers) {
+  return fetchJson("/scoring/rubric", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tiers }),
+  });
+}
