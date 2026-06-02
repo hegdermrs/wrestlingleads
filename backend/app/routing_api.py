@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from .routing import assign_rep, route_and_notify, should_route_lead
 from .routing_config import load_routing_config, save_routing_config
 from .routing_log import recent_entries, weekly_stats
-from .routing_notify import smtp_configured
+from .routing_notify import smtp_configured, verify_smtp_connection
 from .store import store
 
 router = APIRouter(prefix="/routing", tags=["routing"])
@@ -115,3 +115,9 @@ def send_unrouted(limit: int = 25) -> dict[str, Any]:
         results.append({"email": email, **outcome})
 
     return {"processed": len(results), "results": results}
+
+
+@router.post("/smtp-test")
+def smtp_test() -> dict[str, Any]:
+    """Verify SMTP login with current server environment variables."""
+    return verify_smtp_connection()

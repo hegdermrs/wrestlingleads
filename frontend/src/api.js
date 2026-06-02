@@ -311,6 +311,10 @@ export function sendUnrouted() {
   return fetchJson("/routing/send-unrouted", { method: "POST" });
 }
 
+export function testSmtpConnection() {
+  return fetchJson("/routing/smtp-test", { method: "POST" });
+}
+
 export function fetchScoringRubric() {
   return fetchJson("/scoring/rubric");
 }

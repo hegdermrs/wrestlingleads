@@ -13,6 +13,7 @@ import {
   fetchJson,
   fetchScoringRubric,
   saveScoringRubric,
+  testSmtpConnection,
   uploadBaseline,
   uploadFile,
   uploadScoreFile,
@@ -42,6 +43,7 @@ export default function Settings() {
   const [wufooStatus, setWufooStatus] = useState(null);
   const [rubric, setRubric] = useState({ Hot: 75, Warm: 50, Cold: 25 });
   const [rubricSaving, setRubricSaving] = useState(false);
+  const [smtpTesting, setSmtpTesting] = useState(false);
 
   useEffect(() => {
     checkHealth().then(setHealth);
@@ -120,6 +122,24 @@ export default function Settings() {
     }
   };
 
+  const handleSmtpTest = async () => {
+    setSmtpTesting(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await testSmtpConnection();
+      if (result.ok) {
+        setMessage(`Email login OK for ${result.user}.`);
+      } else {
+        setError(result.error || "SMTP test failed.");
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSmtpTesting(false);
+    }
+  };
+
   const formConnected = wufooStatus?.secret_configured;
   const hasLeads = (wufooStatus?.cache_row_count ?? 0) > 0;
 
@@ -187,6 +207,46 @@ export default function Settings() {
           disabled={rubricSaving}
         >
           {rubricSaving ? "Saving…" : "Save rubric"}
+        </button>
+      </Card>
+
+      <Card
+        title="Rep email notifications"
+        subtitle="Google Workspace SMTP — configured on the server (Railway), not in this screen"
+        delay={30}
+      >
+        <div className="status-grid email-status-grid">
+          <div className={`status-tile ${health?.smtp_configured ? "ok" : "warn"}`}>
+            <span>Mail settings on server</span>
+            <strong>{health?.smtp_configured ? "Variables set" : "Not set yet"}</strong>
+          </div>
+          <div className="status-tile">
+            <span>Sender account</span>
+            <strong>{health?.smtp_user || "—"}</strong>
+          </div>
+        </div>
+        <p className="card-copy">
+          Use <strong>mindset@wrestlingmindset.com</strong> (or another mailbox on your domain). The app password
+          must be created while signed in as that exact account — not a personal Gmail.
+        </p>
+        <ol className="email-checklist">
+          <li>Sign in to Google as the sender mailbox (e.g. mindset@…)</li>
+          <li>Turn on <strong>2-Step Verification</strong> for that account</li>
+          <li>
+            Google Account → Security → <strong>App passwords</strong> → create one for Mail
+          </li>
+          <li>
+            In Railway, set <code>SMTP_HOST</code>, <code>SMTP_PORT=587</code>, <code>SMTP_USER</code>,{" "}
+            <code>SMTP_PASSWORD</code> (16 chars, no spaces), and <code>ROUTING_FROM_EMAIL</code>
+          </li>
+          <li>Redeploy, then click Test email login below</li>
+        </ol>
+        <p className="field-hint">
+          If login still fails, your Google Workspace admin may have disabled app passwords — ask them to allow
+          it, or use an SMTP relay.
+        </p>
+        <button type="button" className="btn secondary" onClick={handleSmtpTest} disabled={smtpTesting}>
+          {smtpTesting ? "Testing…" : "Test email login"}
         </button>
       </Card>
 

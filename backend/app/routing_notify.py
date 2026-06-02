@@ -3,14 +3,87 @@
 from __future__ import annotations
 
 import os
+import re
 import smtplib
+import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr, parseaddr
 from typing import Any
 
 import pandas as pd
 
 from .features import _safe_str
+
+
+def _normalize_app_password(value: str) -> str:
+    """Google app passwords are 16 chars — users often paste with spaces."""
+    return re.sub(r"\s+", "", value.strip())
+
+
+def _smtp_settings() -> dict[str, str | int]:
+    host = os.getenv("SMTP_HOST", "").strip()
+    user = os.getenv("SMTP_USER", "").strip()
+    password = _normalize_app_password(os.getenv("SMTP_PASSWORD", ""))
+    from_raw = os.getenv("ROUTING_FROM_EMAIL", user).strip()
+    _, from_addr = parseaddr(from_raw)
+    from_email = from_addr or user
+    from_name = from_raw if "<" in from_raw else ""
+    port = int(os.getenv("SMTP_PORT", "587") or "587")
+    return {
+        "host": host,
+        "user": user,
+        "password": password,
+        "from_raw": from_raw,
+        "from_email": from_email,
+        "from_name": from_name,
+        "port": port,
+    }
+
+
+def smtp_configured() -> bool:
+    settings = _smtp_settings()
+    return bool(settings["host"] and settings["user"] and settings["password"])
+
+
+def verify_smtp_connection() -> dict[str, Any]:
+    """Try SMTP login only — used for diagnostics."""
+    settings = _smtp_settings()
+    host = str(settings["host"])
+    user = str(settings["user"])
+    password = str(settings["password"])
+    port = int(settings["port"])
+
+    if not all([host, user, password]):
+        return {
+            "ok": False,
+            "error": "SMTP not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASSWORD on Railway.",
+            "user": user or None,
+        }
+
+    try:
+        if port == 465:
+            context = ssl.create_default_context()
+            with smtplib.SMTP_SSL(host, port, timeout=30, context=context) as server:
+                server.login(user, password)
+        else:
+            with smtplib.SMTP(host, port, timeout=30) as server:
+                server.ehlo()
+                server.starttls(context=ssl.create_default_context())
+                server.ehlo()
+                server.login(user, password)
+    except smtplib.SMTPAuthenticationError as exc:
+        code = exc.smtp_code if hasattr(exc, "smtp_code") else None
+        hint = (
+            "Google rejected the login. The app password must be created while signed in as "
+            f"{user} (with 2-Step Verification on). Delete the old app password and create a new one. "
+            "If this is Google Workspace, your admin may need to allow app passwords."
+        )
+        return {"ok": False, "error": hint, "user": user, "smtp_code": code}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "user": user}
+
+    return {"ok": True, "user": user, "host": host, "port": port}
 
 
 def _lead_field(row: pd.Series | dict[str, Any], key: str) -> str:
@@ -101,10 +174,13 @@ def send_lead_assignment_email(
     assignment: dict[str, Any],
 ) -> bool:
     """Send assignment email via SMTP. Returns True if sent."""
-    host = os.getenv("SMTP_HOST", "").strip()
-    user = os.getenv("SMTP_USER", "").strip()
-    password = os.getenv("SMTP_PASSWORD", "").strip()
-    from_email = os.getenv("ROUTING_FROM_EMAIL", user).strip()
+    settings = _smtp_settings()
+    host = str(settings["host"])
+    user = str(settings["user"])
+    password = str(settings["password"])
+    from_raw = str(settings["from_raw"])
+    from_email = str(settings["from_email"])
+    port = int(settings["port"])
     to_email = _safe_str(rep.get("email"))
 
     if not all([host, user, password, from_email, to_email]):
@@ -112,27 +188,26 @@ def send_lead_assignment_email(
             "SMTP not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASSWORD, ROUTING_FROM_EMAIL on Railway."
         )
 
-    port = int(os.getenv("SMTP_PORT", "587"))
     subject, text, html = build_assignment_email(row, rep, assignment)
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = from_email
+    msg["From"] = from_raw if from_raw else formataddr(("Leads Wrestling", from_email))
     msg["To"] = to_email
     msg.attach(MIMEText(text, "plain", "utf-8"))
     msg.attach(MIMEText(html, "html", "utf-8"))
 
-    with smtplib.SMTP(host, port, timeout=30) as server:
-        server.starttls()
-        server.login(user, password)
-        server.sendmail(from_email, [to_email], msg.as_string())
+    if port == 465:
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL(host, port, timeout=30, context=context) as server:
+            server.login(user, password)
+            server.sendmail(from_email, [to_email], msg.as_string())
+    else:
+        with smtplib.SMTP(host, port, timeout=30) as server:
+            server.ehlo()
+            server.starttls(context=ssl.create_default_context())
+            server.ehlo()
+            server.login(user, password)
+            server.sendmail(from_email, [to_email], msg.as_string())
 
     return True
-
-
-def smtp_configured() -> bool:
-    return bool(
-        os.getenv("SMTP_HOST")
-        and os.getenv("SMTP_USER")
-        and os.getenv("SMTP_PASSWORD")
-    )
