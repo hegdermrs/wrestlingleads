@@ -197,94 +197,99 @@ export default function Rules() {
           {(rules?.reps || []).map((rep, index) => {
             const cap = parseWeeklyCap(rep.weekly_cap);
             const count = weekly[rep.id] ?? 0;
-            const capPct = cap ? Math.min(100, (count / cap) * 100) : null;
+            const capPct = cap ? Math.min(100, (count / cap) * 100) : 0;
+            const isGeneral = rep.bucket === "general";
 
             return (
               <div key={rep.id || index} className={`team-card ${repBucketClass(rep.bucket)} animate-slide-up`} style={{ animationDelay: `${index * 70}ms` }}>
-                <div className="team-card-head">
-                  <div className="team-avatar">{rep.name?.charAt(0) || "?"}</div>
-                  <div className="team-card-fields">
-                    <label className="field-label compact">
-                      Role label
-                      <input
-                        className="input team-role-input"
-                        value={rep.role_label ?? ""}
-                        onChange={(e) => updateRep(index, "role_label", e.target.value)}
-                        placeholder={BUCKET_INFO[rep.bucket]?.title || "Sales rep"}
-                      />
-                    </label>
-                    <label className="field-label compact">
-                      Name
-                      <input
-                        className="input team-name-input"
-                        value={rep.name || ""}
-                        onChange={(e) => updateRep(index, "name", e.target.value)}
-                        placeholder="Full name"
-                      />
-                    </label>
+                <div className="team-card-body">
+                  <div className="team-card-head">
+                    <div className="team-avatar" aria-hidden="true">
+                      {rep.name?.charAt(0) || "?"}
+                    </div>
+                    <div className="team-card-fields">
+                      <label className="field-label">
+                        Role label
+                        <input
+                          className="input team-role-input"
+                          value={rep.role_label ?? ""}
+                          onChange={(e) => updateRep(index, "role_label", e.target.value)}
+                          placeholder={BUCKET_INFO[rep.bucket]?.title || "Sales rep"}
+                        />
+                      </label>
+                      <label className="field-label">
+                        Name
+                        <input
+                          className="input team-name-input"
+                          value={rep.name || ""}
+                          onChange={(e) => updateRep(index, "name", e.target.value)}
+                          placeholder="Full name"
+                        />
+                      </label>
+                    </div>
                   </div>
+
+                  <label className="field-label">
+                    What leads they get
+                    <textarea
+                      className="input team-desc-input"
+                      rows={2}
+                      value={rep.description ?? ""}
+                      onChange={(e) => updateRep(index, "description", e.target.value)}
+                      placeholder={BUCKET_INFO[rep.bucket]?.hint || "What kinds of leads go here"}
+                    />
+                  </label>
+
+                  <label className="field-label">
+                    Email
+                    <input
+                      className="input"
+                      type="email"
+                      value={rep.email || ""}
+                      onChange={(e) => updateRep(index, "email", e.target.value)}
+                      placeholder="rep@email.com"
+                    />
+                  </label>
+
+                  <label className="field-label">
+                    Weekly limit
+                    <input
+                      className="input cap-input"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={rep.weekly_cap ?? ""}
+                      onChange={(e) =>
+                        updateRep(index, "weekly_cap", e.target.value === "" ? null : e.target.value)
+                      }
+                      placeholder="No limit"
+                    />
+                  </label>
                 </div>
 
-                <label className="field-label">
-                  What leads they get
-                  <textarea
-                    className="input team-desc-input"
-                    rows={2}
-                    value={rep.description ?? ""}
-                    onChange={(e) => updateRep(index, "description", e.target.value)}
-                    placeholder={BUCKET_INFO[rep.bucket]?.hint || "What kinds of leads go here"}
-                  />
-                </label>
-
-                <label className="field-label">
-                  Email
-                  <input
-                    className="input"
-                    type="email"
-                    value={rep.email || ""}
-                    onChange={(e) => updateRep(index, "email", e.target.value)}
-                    placeholder="rep@email.com"
-                  />
-                </label>
-
-                <label className="field-label">
-                  Weekly limit
-                  <input
-                    className="input cap-input"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={rep.weekly_cap ?? ""}
-                    onChange={(e) =>
-                      updateRep(index, "weekly_cap", e.target.value === "" ? null : e.target.value)
-                    }
-                    placeholder="No limit"
-                  />
-                </label>
-
-                {cap != null ? (
+                <div className="team-card-footer">
                   <div className="cap-meter">
                     <div className="cap-label">
-                      This week: <strong>{count}</strong> of {cap}
+                      This week: <strong>{count}</strong>
+                      {cap != null ? ` of ${cap}` : " assigned · no limit"}
                     </div>
                     <div className="cap-track">
                       <div className="cap-fill" style={{ width: `${capPct}%` }} />
                     </div>
                   </div>
-                ) : (
-                  <p className="muted cap-open">{count} assigned this week · no limit set</p>
-                )}
 
-                {rep.bucket === "general" && (
-                  <div className="team-card-toggle">
-                    <Toggle
-                      checked={!!rep.west_coast_priority}
-                      onChange={(v) => updateRep(index, "west_coast_priority", v)}
-                      label="West Coast priority"
-                      description="Gets leads from West Coast states first"
-                    />
+                  <div className={`team-card-toggle ${isGeneral ? "" : "is-spacer"}`}>
+                    {isGeneral && (
+                      <Toggle
+                        checked={!!rep.west_coast_priority}
+                        onChange={(v) => updateRep(index, "west_coast_priority", v)}
+                        label="West Coast priority"
+                        description="Gets West Coast states first"
+                        compact
+                      />
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             );
           })}

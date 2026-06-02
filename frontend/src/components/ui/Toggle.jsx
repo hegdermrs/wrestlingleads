@@ -1,6 +1,6 @@
-export default function Toggle({ checked, onChange, label, description }) {
+export default function Toggle({ checked, onChange, label, description, compact = false }) {
   return (
-    <label className="toggle-row">
+    <label className={`toggle-row ${compact ? "compact" : ""}`}>
       <div className="toggle-copy">
         <span className="toggle-label">{label}</span>
         {description && <span className="toggle-desc">{description}</span>}

@@ -622,11 +622,21 @@ a {
 /* Team cards */
 .team-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: 1fr;
   gap: 1rem;
+  align-items: stretch;
+}
+
+@media (min-width: 720px) {
+  .team-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .team-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   border-radius: 16px;
   padding: 1.15rem;
   border: 1px solid var(--border);
@@ -642,11 +652,21 @@ a {
 .team-card.rep-hot { border-top: 3px solid var(--warm); }
 .team-card.rep-general { border-top: 3px solid var(--cold); }
 
+.team-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.team-card-body .field-label {
+  margin-top: 0;
+}
+
 .team-card-head {
   display: flex;
   gap: 0.75rem;
   align-items: flex-start;
-  margin-bottom: 0.75rem;
 }
 
 .team-card-fields {
@@ -654,11 +674,7 @@ a {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-}
-
-.field-label.compact {
-  gap: 0.2rem;
+  gap: 0.65rem;
 }
 
 .team-role-input {
@@ -669,63 +685,62 @@ a {
 }
 
 .team-name-input {
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
+  width: 100%;
 }
 
 .team-desc-input {
-  resize: vertical;
-  min-height: 2.75rem;
+  resize: none;
+  height: 4.25rem;
   line-height: 1.45;
 }
 
 .cap-input {
-  max-width: 140px;
+  width: 100%;
+  max-width: 160px;
+}
+
+.team-card-footer {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .team-card-toggle {
-  margin-top: 0.85rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--border);
+  min-height: 3.25rem;
+}
+
+.team-card-toggle.is-spacer {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .team-avatar {
   width: 48px;
   height: 48px;
+  flex-shrink: 0;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.1);
   display: grid;
   place-items: center;
   font-size: 1.25rem;
   font-weight: 700;
-}
-
-.team-role {
-  margin: 0;
-  font-size: 0.78rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.team-name-input {
-  width: 100%;
-}
-
-.team-hint {
-  font-size: 0.82rem;
-  color: var(--muted);
-  margin: 0 0 0.75rem;
+  margin-top: 1.35rem;
 }
 
 .cap-meter {
-  margin-top: 0.75rem;
+  min-height: 2rem;
 }
 
 .cap-label {
   font-size: 0.82rem;
   color: var(--muted);
   margin-bottom: 0.35rem;
+  min-height: 1.25rem;
 }
 
 .cap-track {
@@ -770,6 +785,16 @@ a {
 
 .toggle-row:last-child {
   border-bottom: none;
+}
+
+.toggle-row.compact {
+  padding: 0;
+  border-bottom: none;
+  align-items: flex-start;
+}
+
+.toggle-row.compact .toggle-copy {
+  padding-right: 0.5rem;
 }
 
 .toggle-label {
