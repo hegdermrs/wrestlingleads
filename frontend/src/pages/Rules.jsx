@@ -171,8 +171,8 @@ export default function Rules() {
       {!rules?.smtp_configured && (
         <Card className="banner-warn" delay={40}>
           <p>
-            <strong>Emails aren't set up yet.</strong> Leads can still be assigned on the dashboard, but reps
-            won't get email notifications until your admin adds mail settings on the server.
+            <strong>Notifications aren't set up yet.</strong> Leads can still be assigned, but reps won't be
+            notified until you add <code>N8N_WEBHOOK_URL</code> or email settings on Railway (Setup tab).
           </p>
         </Card>
       )}
@@ -187,8 +187,8 @@ export default function Rules() {
         <Toggle
           checked={!!rules?.send_email_on_route}
           onChange={(v) => setRules({ ...rules, send_email_on_route: v })}
-          label="Email the assigned rep"
-          description="Sends lead name, message, and score"
+          label="Notify the assigned rep"
+          description="Triggers n8n webhook and/or email (Resend/SMTP) when configured"
         />
       </Card>
 
@@ -337,7 +337,7 @@ export default function Rules() {
                 <span className="assignment-who">{row.rep_name}</span>
                 <span className="assignment-lead">{row.lead_email}</span>
                 <Badge tier={row.ai_tier} showEmoji={false} />
-                {row.email_sent && <span className="sent-tag">Emailed</span>}
+                {row.email_sent && <span className="sent-tag">Notified</span>}
               </li>
             ))}
           </ul>

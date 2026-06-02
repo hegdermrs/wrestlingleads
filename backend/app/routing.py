@@ -9,7 +9,8 @@ import pandas as pd
 from .features import URGENT_DEADLINE_KEYWORDS, _safe_str, has_coaching_signals, is_sparse_subscriber
 from .routing_config import load_routing_config, reps_for_bucket
 from .routing_log import append_routing_entry, count_rep_this_week, was_lead_routed
-from .routing_notify import send_lead_assignment_email
+from .routing_notify import send_lead_assignment_email, email_configured
+from .n8n_notify import n8n_configured, send_n8n_assignment_notification
 
 WEST_COAST_NAME_HINTS = (
     "california",
@@ -196,13 +197,24 @@ def route_and_notify(
     get = row.get if isinstance(row, dict) else row.get
     lead_email = _safe_str(get("Email", ""))
     email_sent = False
+    n8n_sent = False
     notify_error: str | None = None
+    n8n_error: str | None = None
 
     if config.get("send_email_on_route", True):
-        try:
-            email_sent = send_lead_assignment_email(row, rep, assignment)
-        except Exception as exc:
-            notify_error = str(exc)
+        if n8n_configured():
+            try:
+                n8n_sent = send_n8n_assignment_notification(row, rep, assignment)
+            except Exception as exc:
+                n8n_error = str(exc)
+
+        if email_configured():
+            try:
+                email_sent = send_lead_assignment_email(row, rep, assignment)
+            except Exception as exc:
+                notify_error = str(exc)
+        elif not n8n_configured():
+            notify_error = "No notifications configured. Set N8N_WEBHOOK_URL or email on Railway."
 
     append_routing_entry(
         rep_id=_safe_str(rep.get("id")),
@@ -213,11 +225,13 @@ def route_and_notify(
         route_reason=assignment["route_reason"],
         ai_score=_score(row),
         ai_tier=_tier(row),
-        email_sent=email_sent,
+        email_sent=email_sent or n8n_sent,
     )
 
     return {
         **assignment,
         "email_sent": email_sent,
+        "n8n_sent": n8n_sent,
         "notify_error": notify_error,
+        "n8n_error": n8n_error,
     }

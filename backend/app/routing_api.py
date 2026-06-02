@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from .routing import assign_rep, route_and_notify, should_route_lead
 from .routing_config import load_routing_config, save_routing_config
 from .routing_log import recent_entries, weekly_stats
+from .n8n_notify import n8n_configured, notify_configured, verify_n8n_connection
 from .routing_notify import email_configured, email_transport, verify_email_connection
 from .store import store
 
@@ -45,7 +46,9 @@ def get_routing_rules() -> dict[str, Any]:
     config = load_routing_config()
     return {
         **config,
-        "smtp_configured": email_configured(),
+        "smtp_configured": notify_configured(),
+        "email_configured": email_configured(),
+        "n8n_configured": n8n_configured(),
         "email_transport": email_transport(),
     }
 
@@ -56,7 +59,13 @@ def update_routing_rules(body: RoutingRulesUpdate) -> dict[str, Any]:
         saved = save_routing_config(body.model_dump())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {**saved, "smtp_configured": email_configured(), "email_transport": email_transport()}
+    return {
+        **saved,
+        "smtp_configured": notify_configured(),
+        "email_configured": email_configured(),
+        "n8n_configured": n8n_configured(),
+        "email_transport": email_transport(),
+    }
 
 
 @router.get("/stats")
@@ -65,7 +74,9 @@ def routing_stats() -> dict[str, Any]:
     return {
         "weekly": weekly_stats(),
         "recent": recent_entries(15),
-        "smtp_configured": email_configured(),
+        "smtp_configured": notify_configured(),
+        "email_configured": email_configured(),
+        "n8n_configured": n8n_configured(),
         "email_transport": email_transport(),
         "auto_route_enabled": config.get("auto_route_enabled", False),
     }
@@ -123,3 +134,9 @@ def send_unrouted(limit: int = 25) -> dict[str, Any]:
 def smtp_test() -> dict[str, Any]:
     """Verify email delivery config (Resend HTTPS or SMTP login)."""
     return verify_email_connection()
+
+
+@router.post("/n8n-test")
+def n8n_test() -> dict[str, Any]:
+    """Send a test payload to the n8n webhook."""
+    return verify_n8n_connection()

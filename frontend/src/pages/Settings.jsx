@@ -13,6 +13,7 @@ import {
   fetchJson,
   fetchScoringRubric,
   saveScoringRubric,
+  testN8nWebhook,
   testSmtpConnection,
   uploadBaseline,
   uploadFile,
@@ -44,6 +45,7 @@ export default function Settings() {
   const [rubric, setRubric] = useState({ Hot: 75, Warm: 50, Cold: 25 });
   const [rubricSaving, setRubricSaving] = useState(false);
   const [smtpTesting, setSmtpTesting] = useState(false);
+  const [n8nTesting, setN8nTesting] = useState(false);
 
   useEffect(() => {
     checkHealth().then(setHealth);
@@ -143,6 +145,24 @@ export default function Settings() {
     }
   };
 
+  const handleN8nTest = async () => {
+    setN8nTesting(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await testN8nWebhook();
+      if (result.ok) {
+        setMessage(result.note || "n8n webhook test sent — check your n8n execution log.");
+      } else {
+        setError(result.error || "n8n test failed.");
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setN8nTesting(false);
+    }
+  };
+
   const formConnected = wufooStatus?.secret_configured;
   const hasLeads = (wufooStatus?.cache_row_count ?? 0) > 0;
 
@@ -214,8 +234,39 @@ export default function Settings() {
       </Card>
 
       <Card
-        title="Rep email notifications"
-        subtitle="Configured on Railway — Gmail SMTP or Resend HTTPS"
+        title="n8n notifications"
+        subtitle="Send lead assignments to your n8n workflow — no DNS required"
+        delay={25}
+      >
+        <div className={`status-tile ${health?.n8n_configured ? "ok" : "warn"}`} style={{ marginBottom: "1rem" }}>
+          <span>Webhook on server</span>
+          <strong>{health?.n8n_configured ? "Configured" : "Not set yet"}</strong>
+        </div>
+        <p className="card-copy">
+          When a lead is routed, LeadsWrestling POSTs JSON to your n8n webhook. n8n sends the email (Gmail,
+          Outlook, etc.). Runs <strong>alongside</strong> Resend when both are configured.
+        </p>
+        <ol className="email-checklist">
+          <li>In n8n: create a workflow with a <strong>Webhook</strong> trigger (POST)</li>
+          <li>Add a <strong>Gmail</strong> or <strong>Send Email</strong> node — map fields from the webhook body</li>
+          <li>
+            Copy the webhook URL → Railway variable <code>N8N_WEBHOOK_URL</code>
+          </li>
+          <li>Optional: set <code>N8N_WEBHOOK_SECRET</code> if your webhook checks auth</li>
+          <li>Redeploy → Test n8n webhook below → enable <strong>Notify the assigned rep</strong> on Team</li>
+        </ol>
+        <p className="field-hint">
+          Payload includes <code>lead</code>, <code>rep</code>, <code>assignment</code>, and pre-built{" "}
+          <code>email.subject</code> / <code>email.text</code> / <code>email.html</code> for your email node.
+        </p>
+        <button type="button" className="btn secondary" onClick={handleN8nTest} disabled={n8nTesting}>
+          {n8nTesting ? "Sending test…" : "Test n8n webhook"}
+        </button>
+      </Card>
+
+      <Card
+        title="Rep email notifications (Resend / Gmail)"
+        subtitle="Optional — direct email from Railway; use n8n above if DNS isn't ready"
         delay={30}
       >
         <div className="banner-warn email-railway-banner">

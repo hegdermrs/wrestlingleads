@@ -315,6 +315,10 @@ export function testSmtpConnection() {
   return fetchJson("/routing/smtp-test", { method: "POST" });
 }
 
+export function testN8nWebhook() {
+  return fetchJson("/routing/n8n-test", { method: "POST" });
+}
+
 export function fetchScoringRubric() {
   return fetchJson("/scoring/rubric");
 }
