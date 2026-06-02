@@ -15,6 +15,7 @@ data/score_jobs/
 data/reports/
 data/routing_config.json
 data/routing_log.json
+data/webhook_recent_log.json
 
 # CRM exports contain PII — import via Settings after deploy
 leads.xlsx

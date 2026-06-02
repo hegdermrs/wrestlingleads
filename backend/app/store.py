@@ -14,6 +14,7 @@ from .scorer import metrics_summary
 
 CACHE_PARQUET = DATA_DIR / "scored_cache.parquet"
 CACHE_META = DATA_DIR / "scored_cache_meta.json"
+WEBHOOK_RECENT_LOG = DATA_DIR / "webhook_recent_log.json"
 BASELINE_PARQUET = DATA_DIR / "baseline_qualified.parquet"
 BASELINE_META = DATA_DIR / "baseline_qualified_meta.json"
 QUALIFIED_FALLBACK = DATA_DIR / "qualified.xlsx"
@@ -51,6 +52,7 @@ _SYNTHETIC_TEST_EMAILS = frozenset(
     }
 )
 _SYNTHETIC_TEST_RECORD_IDS = frozenset({"99999901", "99999902"})
+_MAX_WEBHOOK_LOG = 200
 
 
 def _safe_str(value: object) -> str:
@@ -103,6 +105,46 @@ def _is_customer(row: pd.Series | dict[str, Any]) -> bool:
     else:
         lifecycle = _safe_str(row.get("Lifecycle Stage", ""))
     return lifecycle == "Customer"
+
+
+def _read_webhook_log() -> list[dict[str, Any]]:
+    if not WEBHOOK_RECENT_LOG.exists():
+        return []
+    try:
+        data = json.loads(WEBHOOK_RECENT_LOG.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _write_webhook_log(entries: list[dict[str, Any]]) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    WEBHOOK_RECENT_LOG.write_text(json.dumps(entries[:_MAX_WEBHOOK_LOG], indent=2), encoding="utf-8")
+
+
+def log_webhook_lead(record_id: str = "", email: str = "") -> None:
+    """Track Wufoo webhook ingests for the dashboard 'Just came in' strip only."""
+    email_key = _norm_email(email)
+    record_key = _safe_str(record_id)
+    if not email_key and not record_key:
+        return
+
+    entries = _read_webhook_log()
+    entries = [
+        e
+        for e in entries
+        if (email_key and _norm_email(e.get("email", "")) != email_key)
+        and (not record_key or _safe_str(e.get("record_id", "")) != record_key)
+    ]
+    entries.insert(
+        0,
+        {
+            "record_id": record_key,
+            "email": email_key,
+            "at": datetime.now(UTC).isoformat(),
+        },
+    )
+    _write_webhook_log(entries)
 
 
 class ScoredLeadsStore:
@@ -389,6 +431,10 @@ class ScoredLeadsStore:
             scored.at[scored.index[0], "Create Date"] = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
 
         result = self.append_scored_row(scored.iloc[0])
+        log_webhook_lead(
+            record_id=_safe_str(scored.iloc[0].get("Record ID", "")),
+            email=result.get("email", ""),
+        )
 
         from .routing import route_and_notify
         from .routing_config import load_routing_config
@@ -475,19 +521,76 @@ class ScoredLeadsStore:
 
         return {"total": total, "page": page, "limit": limit, "leads": leads}
 
-    def get_recent(self, limit: int = 10) -> list[dict[str, Any]]:
+    def _lookup_dashboard_lead(self, record_id: str = "", email: str = "") -> pd.Series | None:
+        dashboard = self._dashboard_df()
+        if dashboard.empty:
+            return None
+
+        record_key = _safe_str(record_id)
+        if record_key and "Record ID" in dashboard.columns:
+            matches = dashboard[dashboard["Record ID"].astype(str).str.strip() == record_key]
+            if not matches.empty:
+                row = matches.iloc[0]
+                if not is_synthetic_test_lead(row):
+                    return row
+
+        email_key = _norm_email(email)
+        if email_key and "Email" in dashboard.columns:
+            matches = dashboard[
+                dashboard["Email"].astype(str).str.strip().str.lower() == email_key
+            ]
+            if not matches.empty:
+                row = matches.iloc[0]
+                if not is_synthetic_test_lead(row):
+                    return row
+
+        return None
+
+    def _collect_webhook_lead_rows(self, limit: int | None = None) -> list[pd.Series]:
         if not self.loaded:
             return []
 
-        dashboard = self._dashboard_df()
-        if dashboard.empty:
+        entries = _read_webhook_log()
+        if not entries:
             return []
 
-        dashboard = dashboard[~dashboard.apply(is_synthetic_test_lead, axis=1)]
-        if dashboard.empty:
+        seen: set[str] = set()
+        rows: list[pd.Series] = []
+        for entry in entries:
+            if limit is not None and len(rows) >= limit:
+                break
+            record_id = _safe_str(entry.get("record_id", ""))
+            email = _norm_email(entry.get("email", ""))
+            dedupe_key = email or record_id
+            if not dedupe_key or dedupe_key in seen:
+                continue
+
+            row = self._lookup_dashboard_lead(record_id=record_id, email=email)
+            if row is None:
+                continue
+
+            seen.add(dedupe_key)
+            rows.append(row)
+
+        return rows
+
+    def get_recent_webhook_tier_counts(self) -> dict[str, int]:
+        """Count webhook-ingested leads by tier (for dashboard incoming badges)."""
+        rows = self._collect_webhook_lead_rows(limit=None)
+        counts = {"Hot": 0, "Warm": 0, "Cold": 0, "Unqualified": 0}
+        for row in rows:
+            tier = _safe_str(row.get("AI Tier", ""))
+            if tier in counts:
+                counts[tier] += 1
+        return {"total": len(rows), **counts}
+
+    def get_recent(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Recent leads from Wufoo webhooks only — does not include bulk imports."""
+        rows = self._collect_webhook_lead_rows(limit=limit)
+        if not rows:
             return []
 
-        recent = _sort_dashboard_newest(dashboard).head(limit)
+        recent = pd.DataFrame(rows)
         cols = [c for c in DISPLAY_COLUMNS if c in recent.columns]
         return recent[cols].fillna("").to_dict(orient="records")
 

@@ -129,8 +129,11 @@ def dashboard_export(tier: str | None = Query(default=None)) -> StreamingRespons
 @app.get("/dashboard/recent")
 def dashboard_recent(limit: int = Query(default=10, ge=1, le=50)) -> dict:
     if not store.loaded:
-        return {"recent": []}
-    return {"recent": store.get_recent(limit=limit)}
+        return {"recent": [], "webhook_recent_counts": {"total": 0, "Hot": 0, "Warm": 0, "Cold": 0, "Unqualified": 0}}
+    return {
+        "recent": store.get_recent(limit=limit),
+        "webhook_recent_counts": store.get_recent_webhook_tier_counts(),
+    }
 
 
 @app.post("/train")
