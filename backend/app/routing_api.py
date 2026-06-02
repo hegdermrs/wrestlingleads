@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from .routing import assign_rep, route_and_notify, should_route_lead
 from .routing_config import load_routing_config, save_routing_config
 from .routing_log import recent_entries, weekly_stats
-from .routing_notify import smtp_configured, verify_smtp_connection
+from .routing_notify import email_configured, email_transport, verify_email_connection
 from .store import store
 
 router = APIRouter(prefix="/routing", tags=["routing"])
@@ -45,7 +45,8 @@ def get_routing_rules() -> dict[str, Any]:
     config = load_routing_config()
     return {
         **config,
-        "smtp_configured": smtp_configured(),
+        "smtp_configured": email_configured(),
+        "email_transport": email_transport(),
     }
 
 
@@ -55,7 +56,7 @@ def update_routing_rules(body: RoutingRulesUpdate) -> dict[str, Any]:
         saved = save_routing_config(body.model_dump())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {**saved, "smtp_configured": smtp_configured()}
+    return {**saved, "smtp_configured": email_configured(), "email_transport": email_transport()}
 
 
 @router.get("/stats")
@@ -64,7 +65,8 @@ def routing_stats() -> dict[str, Any]:
     return {
         "weekly": weekly_stats(),
         "recent": recent_entries(15),
-        "smtp_configured": smtp_configured(),
+        "smtp_configured": email_configured(),
+        "email_transport": email_transport(),
         "auto_route_enabled": config.get("auto_route_enabled", False),
     }
 
@@ -119,5 +121,5 @@ def send_unrouted(limit: int = 25) -> dict[str, Any]:
 
 @router.post("/smtp-test")
 def smtp_test() -> dict[str, Any]:
-    """Verify SMTP login with current server environment variables."""
-    return verify_smtp_connection()
+    """Verify email delivery config (Resend HTTPS or SMTP login)."""
+    return verify_email_connection()

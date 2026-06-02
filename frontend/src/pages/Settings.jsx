@@ -129,9 +129,10 @@ export default function Settings() {
     try {
       const result = await testSmtpConnection();
       if (result.ok) {
-        setMessage(`Email login OK for ${result.user}.`);
+        const via = result.transport === "resend" ? "Resend (HTTPS)" : "Gmail SMTP";
+        setMessage(`Email connection OK via ${via}${result.user ? ` (${result.user})` : ""}.`);
       } else {
-        setError(result.error || "SMTP test failed.");
+        setError(result.error || "Email test failed.");
       }
     } catch (err) {
       setError(err.message);
@@ -212,41 +213,66 @@ export default function Settings() {
 
       <Card
         title="Rep email notifications"
-        subtitle="Google Workspace SMTP — configured on the server (Railway), not in this screen"
+        subtitle="Configured on Railway — Gmail SMTP or Resend HTTPS"
         delay={30}
       >
+        <div className="banner-warn email-railway-banner">
+          <p>
+            <strong>Railway Hobby blocks Gmail SMTP</strong> (the “Network is unreachable” error). Your Google
+            password is fine — the server cannot open port 587. Use <strong>Resend</strong> on Hobby, or{" "}
+            <strong>upgrade Railway to Pro</strong> for Gmail SMTP.
+          </p>
+        </div>
         <div className="status-grid email-status-grid">
           <div className={`status-tile ${health?.smtp_configured ? "ok" : "warn"}`}>
-            <span>Mail settings on server</span>
-            <strong>{health?.smtp_configured ? "Variables set" : "Not set yet"}</strong>
+            <span>Mail configured</span>
+            <strong>{health?.smtp_configured ? "Yes" : "Not yet"}</strong>
           </div>
           <div className="status-tile">
-            <span>Sender account</span>
-            <strong>{health?.smtp_user || "—"}</strong>
+            <span>Method</span>
+            <strong>
+              {health?.email_transport === "resend"
+                ? "Resend (HTTPS)"
+                : health?.email_transport === "smtp"
+                  ? "Gmail SMTP"
+                  : "—"}
+            </strong>
+          </div>
+          <div className="status-tile">
+            <span>From address</span>
+            <strong>{health?.smtp_user || "mindset@…"}</strong>
           </div>
         </div>
-        <p className="card-copy">
-          Use <strong>mindset@wrestlingmindset.com</strong> (or another mailbox on your domain). The app password
-          must be created while signed in as that exact account — not a personal Gmail.
-        </p>
+
+        <h4 className="setup-option-title">Option A — Resend (recommended on Railway Hobby)</h4>
         <ol className="email-checklist">
-          <li>Sign in to Google as the sender mailbox (e.g. mindset@…)</li>
-          <li>Turn on <strong>2-Step Verification</strong> for that account</li>
           <li>
-            Google Account → Security → <strong>App passwords</strong> → create one for Mail
+            Create a free account at{" "}
+            <a href="https://resend.com" target="_blank" rel="noreferrer">
+              resend.com
+            </a>
           </li>
+          <li>Add and verify domain <strong>wrestlingmindset.com</strong> (DNS records in Resend dashboard)</li>
+          <li>Create an API key → set <code>RESEND_API_KEY</code> on Railway</li>
           <li>
-            In Railway, set <code>SMTP_HOST</code>, <code>SMTP_PORT=587</code>, <code>SMTP_USER</code>,{" "}
-            <code>SMTP_PASSWORD</code> (16 chars, no spaces), and <code>ROUTING_FROM_EMAIL</code>
+            Set <code>ROUTING_FROM_EMAIL</code> to{" "}
+            <code>Leads Wrestling &lt;mindset@wrestlingmindset.com&gt;</code>
           </li>
-          <li>Redeploy, then click Test email login below</li>
+          <li>Redeploy — Resend takes priority over SMTP when the API key is set</li>
         </ol>
-        <p className="field-hint">
-          If login still fails, your Google Workspace admin may have disabled app passwords — ask them to allow
-          it, or use an SMTP relay.
-        </p>
+
+        <h4 className="setup-option-title">Option B — Gmail SMTP (Railway Pro only)</h4>
+        <ol className="email-checklist">
+          <li>Upgrade Railway workspace to <strong>Pro</strong> and redeploy</li>
+          <li>App password for mindset@ (2-Step Verification on that mailbox)</li>
+          <li>
+            Railway vars: <code>SMTP_HOST=smtp.gmail.com</code>, <code>SMTP_PORT=587</code>,{" "}
+            <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code>, <code>ROUTING_FROM_EMAIL</code>
+          </li>
+        </ol>
+
         <button type="button" className="btn secondary" onClick={handleSmtpTest} disabled={smtpTesting}>
-          {smtpTesting ? "Testing…" : "Test email login"}
+          {smtpTesting ? "Testing…" : "Test email connection"}
         </button>
       </Card>
 
