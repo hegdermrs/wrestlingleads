@@ -73,6 +73,22 @@ export async function checkHealth() {
   }
 }
 
+export function loginWithPassword(password) {
+  return fetchJson("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+}
+
+export function changeAppPassword({ current_password, new_password, confirm_password }) {
+  return fetchJson("/auth/change-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ current_password, new_password, confirm_password }),
+  });
+}
+
 export async function uploadFile(path, file, params = {}) {
   const qs = new URLSearchParams(params).toString();
   const url = `${API_URL}${path}${qs ? `?${qs}` : ""}`;

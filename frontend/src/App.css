@@ -1498,9 +1498,28 @@ a {
   font-size: 0.85rem;
 }
 
+.auth-success {
+  margin: 0.65rem 0 0;
+  color: #4ade80;
+  font-size: 0.85rem;
+}
+
 .auth-submit {
   width: 100%;
   margin-top: 1rem;
+}
+
+.auth-link-btn {
+  width: 100%;
+  margin-top: 0.65rem;
+}
+
+.auth-card form .field-label {
+  margin-top: 0.85rem;
+}
+
+.auth-card form .field-label:first-of-type {
+  margin-top: 0;
 }
 
 /* Scoring rubric editor */

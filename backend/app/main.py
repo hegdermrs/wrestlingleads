@@ -21,6 +21,8 @@ from .score_jobs import create_job, get_job, list_jobs, update_job
 from .scorer import metrics_summary, score_dataframe_async
 from .store import store
 from .train import train_model
+from .auth_api import router as auth_router
+from .auth_store import init_auth_db
 from .webhooks import router as webhooks_router
 from .routing_api import router as routing_router
 from .routing_notify import email_configured, email_transport, resend_sandbox_enabled
@@ -31,6 +33,7 @@ load_dotenv()
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 app = FastAPI(title="Leads Qualifier API", version="1.0.0")
+app.include_router(auth_router)
 app.include_router(webhooks_router)
 app.include_router(routing_router)
 app.include_router(scoring_router)
@@ -61,6 +64,7 @@ async def unhandled_exception_handler(_request: Request, exc: Exception) -> JSON
 
 @app.on_event("startup")
 def startup() -> None:
+    init_auth_db()
     if not MODEL_PATH.exists() and DEFAULT_TRAINING_FILE.exists():
         train_model()
     store.load_on_startup()

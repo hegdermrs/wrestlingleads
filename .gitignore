@@ -15,6 +15,7 @@ data/score_jobs/
 data/reports/
 data/routing_config.json
 data/scoring_config.json
+data/app_auth.db
 data/routing_log.json
 data/webhook_recent_log.json
 
