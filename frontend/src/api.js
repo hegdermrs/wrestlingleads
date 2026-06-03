@@ -1,9 +1,16 @@
+function normalizeApiBase(url) {
+  let base = url.replace(/\/health\/?$/i, "").replace(/\/$/, "");
+  // Direct Railway URL must not include /api — only Netlify's relative /api prefix is rewritten in netlify.toml
+  if (/^https?:\/\//i.test(base) && /\/api$/i.test(base)) {
+    base = base.replace(/\/api$/i, "");
+  }
+  return base.replace(/\/$/, "");
+}
+
 export function resolveApiUrl() {
-  let url = import.meta.env.VITE_API_URL?.trim();
+  const url = import.meta.env.VITE_API_URL?.trim();
   if (url) {
-    // Common mistake: pasting the /health test URL instead of the API base URL
-    url = url.replace(/\/health\/?$/i, "");
-    return url.replace(/\/$/, "");
+    return normalizeApiBase(url);
   }
   if (import.meta.env.DEV) return "http://localhost:8000";
   // Production on Netlify: /api/* is proxied to Railway in netlify.toml
@@ -51,12 +58,20 @@ export async function fetchJson(path, options = {}) {
 
   if (!res.ok) {
     const detail = data?.detail;
-    const message =
+    let message =
       typeof detail === "string"
         ? detail
         : Array.isArray(detail)
           ? detail.map((d) => d.msg).join(", ")
           : `Request failed (${res.status}) at ${url}`;
+    if (
+      res.status === 404 &&
+      message === "Not Found" &&
+      path.startsWith("/auth")
+    ) {
+      message =
+        "Auth API not found. Set VITE_API_URL to your Railway URL without /api (e.g. https://wrestlingleads-production.up.railway.app), then redeploy Netlify.";
+    }
     const err = new Error(message);
     err.status = res.status;
     throw err;
