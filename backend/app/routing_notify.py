@@ -304,24 +304,7 @@ def _nl2br(value: object) -> str:
     return _esc(value).replace("\n", "<br>")
 
 
-def _tier_styles(tier: str) -> tuple[str, str, str]:
-    """Background, text color, label for tier badge."""
-    key = _safe_str(tier)
-    styles = {
-        "Hot": ("#fef2f2", "#b91c1c", "Priority"),
-        "Warm": ("#fffbeb", "#b45309", "Good fit"),
-        "Cold": ("#eff6ff", "#1d4ed8", "Low priority"),
-        "Unqualified": ("#f1f5f9", "#475569", "Not a fit"),
-    }
-    return styles.get(key, ("#f1f5f9", "#334155", key or "Lead"))
-
-
-def _bucket_accent(bucket: str) -> str:
-    return {
-        "urgent": "#dc2626",
-        "hot_warm": "#ea580c",
-        "general": "#2563eb",
-    }.get(bucket, "#2563eb")
+_EMAIL_ACCENT = "#2563eb"
 
 
 def _html_row(label: str, value: object) -> str:
@@ -337,19 +320,12 @@ def _build_assignment_html(
     *,
     rep_first: str,
     name: str,
-    tier: str,
-    score: str,
-    bucket_label: str,
-    bucket: str,
     route_reason: str,
     grade: str,
     goal: str,
     row: pd.Series | dict[str, Any],
 ) -> str:
-    bg, fg, tier_label = _tier_styles(tier)
-    accent = _bucket_accent(str(bucket))
     message = _lead_field(row, "Message") or "—"
-    reasons = _lead_field(row, "AI Reasons") or "—"
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -359,9 +335,9 @@ def _build_assignment_html(
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
         <tr>
-          <td style="background:{accent};padding:20px 24px;">
+          <td style="background:{_EMAIL_ACCENT};padding:20px 24px;">
             <p style="margin:0 0 6px;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:rgba(255,255,255,0.85);">Leads Wrestling</p>
-            <h1 style="margin:0;font-size:22px;line-height:1.3;color:#ffffff;">{ _esc(bucket_label) }</h1>
+            <h1 style="margin:0;font-size:22px;line-height:1.3;color:#ffffff;">New lead assigned</h1>
           </td>
         </tr>
         <tr>
@@ -374,8 +350,7 @@ def _build_assignment_html(
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
               <tr>
                 <td style="padding:16px 18px;">
-                  <p style="margin:0 0 8px;font-size:20px;font-weight:700;color:#0f172a;">{_esc(name)}</p>
-                  <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:{bg};color:{fg};font-size:12px;font-weight:600;">{ _esc(tier_label) } · Score {_esc(score)}</span>
+                  <p style="margin:0;font-size:20px;font-weight:700;color:#0f172a;">{_esc(name)}</p>
                 </td>
               </tr>
             </table>
@@ -388,11 +363,9 @@ def _build_assignment_html(
               {_html_row("Readiness", _lead_field(row, "Relationship Status") or "—")}
             </table>
             <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;">Goal</p>
-            <div style="margin:0 0 20px;padding:14px 16px;background:#f8fafc;border-left:4px solid {accent};border-radius:0 8px 8px 0;font-size:14px;line-height:1.6;color:#334155;">{_nl2br(goal)}</div>
+            <div style="margin:0 0 20px;padding:14px 16px;background:#f8fafc;border-left:4px solid {_EMAIL_ACCENT};border-radius:0 8px 8px 0;font-size:14px;line-height:1.6;color:#334155;">{_nl2br(goal)}</div>
             <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;">Message</p>
-            <div style="margin:0 0 20px;padding:14px 16px;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;line-height:1.6;color:#0f172a;">{_nl2br(message)}</div>
-            <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;">Scoring notes</p>
-            <div style="margin:0;padding:14px 16px;background:#f8fafc;border-radius:8px;font-size:13px;line-height:1.55;color:#475569;">{_nl2br(reasons)}</div>
+            <div style="margin:0;padding:14px 16px;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;line-height:1.6;color:#0f172a;">{_nl2br(message)}</div>
           </td>
         </tr>
         <tr>
@@ -414,31 +387,20 @@ def build_assignment_email(
 ) -> tuple[str, str, str]:
     """Return subject, plain text body, html body."""
     name = _lead_name(row)
-    tier = _lead_field(row, "AI Tier")
-    score = _lead_field(row, "AI Score")
-    bucket = assignment.get("route_bucket", "")
-    bucket_label = {
-        "urgent": "🔴 Urgent — Red Hot",
-        "hot_warm": "🟠 Hot / Very Warm",
-        "general": "🔵 General follow-up",
-    }.get(bucket, bucket)
-
-    subject = f"[{bucket_label}] New wrestling lead: {name}"
+    subject = f"New wrestling lead: {name}"
 
     grade = _lead_field(row, "Wrestler's Grade") or "—"
     goal = _lead_field(row, "Wrestler's Goal") or "—"
     rep_first = _safe_str(rep.get("name", "there")).split()[0] or "there"
     route_reason = _safe_str(assignment.get("route_reason", ""))
-    _, _, tier_label = _tier_styles(tier)
 
     lines = [
         f"Hi {rep_first},",
         "",
-        f"NEW LEAD ASSIGNED — {bucket_label}",
+        "NEW LEAD ASSIGNED",
         f"Reason: {route_reason}",
         "",
         name,
-        f"Tier: {tier_label}  |  Score: {score}",
         "",
         "CONTACT",
         f"  Email:   {_lead_field(row, 'Email')}",
@@ -456,9 +418,6 @@ def build_assignment_email(
         "MESSAGE",
         _lead_field(row, "Message") or "—",
         "",
-        "SCORING NOTES",
-        _lead_field(row, "AI Reasons") or "—",
-        "",
         "— LeadsWrestling",
     ]
     text = "\n".join(lines)
@@ -466,10 +425,6 @@ def build_assignment_email(
     html = _build_assignment_html(
         rep_first=rep_first,
         name=name,
-        tier=tier,
-        score=score,
-        bucket_label=bucket_label,
-        bucket=bucket,
         route_reason=route_reason,
         grade=grade,
         goal=goal,

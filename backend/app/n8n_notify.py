@@ -42,9 +42,6 @@ def _lead_payload(row: pd.Series | dict[str, Any]) -> dict[str, Any]:
         "relationship_status": _safe_str(get("Relationship Status", "")),
         "wrestler_goal": _safe_str(get("Wrestler's Goal", "")),
         "wrestler_grade": _safe_str(get("Wrestler's Grade", "")),
-        "ai_score": get("AI Score"),
-        "ai_tier": _safe_str(get("AI Tier", "")),
-        "ai_reasons": _safe_str(get("AI Reasons", "")),
         "recommended_action": _safe_str(get("Recommended Action", "")),
         "create_date": _safe_str(get("Create Date", "")),
         "source": _safe_str(get("Source", "")),
@@ -137,9 +134,6 @@ def verify_n8n_connection() -> dict[str, Any]:
         "Message": "This is a test from LeadsWrestling Setup.",
         "Job Title": "Parent Seeking 1-1 Coaching for Child",
         "Relationship Status": "Ready to start now",
-        "AI Score": 82,
-        "AI Tier": "Hot",
-        "AI Reasons": "Setup test payload",
     }
     sample_rep = {
         "id": "test-rep",

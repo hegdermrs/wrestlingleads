@@ -157,14 +157,14 @@ def assign_rep(
                     "assigned": True,
                     "rep": rep,
                     "route_bucket": "urgent",
-                    "route_reason": "Red-hot urgent: Hot tier, high score, ready/ASAP",
+                    "route_reason": "Urgent lead — ready to start soon",
                 }
         # Fall through if Gene at cap
 
     if is_jake_tier(row, config):
         for rep in reps_for_bucket(config, "hot_warm"):
             if _rep_under_cap(rep):
-                reason = "Hot lead" if _tier(row) == "Hot" else f"Very warm lead (score {_score(row):.0f})"
+                reason = "Hot lead" if _tier(row) == "Hot" else "Very warm lead"
                 return {
                     "assigned": True,
                     "rep": rep,
