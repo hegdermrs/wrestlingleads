@@ -25,6 +25,7 @@ UTM_TITLE_HINTS: tuple[tuple[str, str], ...] = (
     ("utm campaign", "UTM Campaign"),
     ("utm term", "UTM Term"),
     ("utm content", "UTM Content"),
+    ("utm keyword", "UTM Keyword"),
 )
 
 

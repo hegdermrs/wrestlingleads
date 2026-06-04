@@ -21,12 +21,14 @@ LEAD_FORM_FIELDS: list[tuple[str, str]] = [
     ("Relationship Status", "How willing is your wrestler to start mindset training?"),
     ("Source", "Where did you hear about Wrestling Mindset?"),
     ("Investment Level", "Preferred investment level"),
+    ("Club/Team Promo Code", "Club/Team Promo Code"),
     ("Message", "Additional wrestling information"),
     ("UTM Source", "UTM Source"),
     ("UTM Medium", "UTM Medium"),
     ("UTM Campaign", "UTM Campaign"),
     ("UTM Term", "UTM Term"),
     ("UTM Content", "UTM Content"),
+    ("UTM Keyword", "UTM Keyword"),
 ]
 
 FORM_COLUMN_NAMES = ["First Name", "Last Name", *[k for k, _ in LEAD_FORM_FIELDS]]
@@ -68,6 +70,8 @@ WUFOO_TITLE_ALIASES: dict[str, str] = {
     "UTM campaign": "UTM Campaign",
     "UTM term": "UTM Term",
     "UTM content": "UTM Content",
+    "UTM keyword": "UTM Keyword",
+    "Club/Team Promo Code": "Club/Team Promo Code",
 }
 
 FORM_LABEL_TO_COLUMN: dict[str, str] = {label: key for key, label in LEAD_FORM_FIELDS}
