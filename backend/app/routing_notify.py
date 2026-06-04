@@ -318,7 +318,7 @@ def _html_row(label: str, value: object) -> str:
         val = _esc(value)
     return f"""
       <tr>
-        <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:13px;width:120px;vertical-align:top;">{label}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:13px;width:42%;vertical-align:top;">{label}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-size:14px;vertical-align:top;">{val}</td>
       </tr>"""
 
@@ -329,7 +329,9 @@ def _build_assignment_html(
     name: str,
     row: pd.Series | dict[str, Any],
 ) -> str:
-    form_rows = "".join(_html_row(label, val) for label, val in form_entries_for_row(row))
+    form_rows = "".join(
+        _html_row(label, val) for label, val in form_entries_for_row(row, include_empty=True)
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -386,8 +388,8 @@ def build_assignment_email(
     rep_first = _safe_str(rep.get("name", "there")).split()[0] or "there"
 
     lines = [f"Hi {rep_first},", "", "NEW LEAD ASSIGNED", "", name, ""]
-    for label, val in form_entries_for_row(row):
-        lines.append(f"{label}: {val}")
+    for label, val in form_entries_for_row(row, include_empty=True):
+        lines.append(f"{label}: {val or '—'}")
     lines.extend(["", "— LeadsWrestling"])
     text = "\n".join(lines)
 

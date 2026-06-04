@@ -30,6 +30,23 @@ LEAD_FORM_FIELDS: list[tuple[str, str]] = [
 
 FORM_COLUMN_NAMES = ["First Name", "Last Name", *[k for k, _ in LEAD_FORM_FIELDS]]
 
+# Wufoo webhooks sometimes send field titles instead of (or alongside) FieldN ids.
+FORM_LABEL_TO_COLUMN: dict[str, str] = {label: key for key, label in LEAD_FORM_FIELDS}
+FORM_LABEL_TO_COLUMN.update(
+    {
+        "Phone Number": "Phone Number",
+        "State/Region": "State/Region",
+        "Wrestler's Goal": "Wrestler's Goal",
+        "Deadline for Goal": "Deadline for Goal",
+        "Job function": "Job function",
+        "Job Title": "Job Title",
+        "Relationship Status": "Relationship Status",
+        "Investment Level": "Investment Level",
+        "Message": "Message",
+        "Source": "Source",
+    }
+)
+
 
 def _safe_str(value: object) -> str:
     if value is None or (isinstance(value, float) and pd.isna(value)):
@@ -45,8 +62,12 @@ def lead_display_name(row: pd.Series | dict[str, Any]) -> str:
     return name or _safe_str(get("Email", "")) or "Lead"
 
 
-def form_entries_for_row(row: pd.Series | dict[str, Any]) -> list[tuple[str, str]]:
-    """Label/value pairs for form submission (skips empty)."""
+def form_entries_for_row(
+    row: pd.Series | dict[str, Any],
+    *,
+    include_empty: bool = False,
+) -> list[tuple[str, str]]:
+    """Label/value pairs for form submission. Skips empty unless include_empty=True."""
     get = row.get if isinstance(row, dict) else row.get
     out: list[tuple[str, str]] = []
     name = lead_display_name(row)
@@ -54,6 +75,6 @@ def form_entries_for_row(row: pd.Series | dict[str, Any]) -> list[tuple[str, str
         out.append(("Name", name))
     for key, label in LEAD_FORM_FIELDS:
         val = _safe_str(get(key, ""))
-        if val:
+        if val or include_empty:
             out.append((label, val))
     return out

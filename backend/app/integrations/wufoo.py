@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ..lead_form_fields import FORM_LABEL_TO_COLUMN
+
 BASE_DIR = Path(__file__).resolve().parents[3]
 WOOFOO_MAP_PATH = BASE_DIR / "config" / "wufoo_field_map.json"
 
@@ -15,6 +17,13 @@ def load_wufoo_map() -> dict[str, str]:
         return {}
     data = json.loads(WOOFOO_MAP_PATH.read_text(encoding="utf-8"))
     return dict(data.get("wufoo_to_qualifier_map", {}))
+
+
+def _load_title_map() -> dict[str, str]:
+    if not WOOFOO_MAP_PATH.exists():
+        return {}
+    data = json.loads(WOOFOO_MAP_PATH.read_text(encoding="utf-8"))
+    return dict(data.get("wufoo_title_to_qualifier_map", {}))
 
 
 def _field_key(field_id: object) -> str:
@@ -30,7 +39,7 @@ def _field_key(field_id: object) -> str:
 
 
 def _normalize_fields_dict(raw: dict[str, Any]) -> dict[str, Any]:
-    """Flatten Wufoo Fields array format to FieldN keys."""
+    """Flatten Wufoo Fields array format to FieldN keys and field titles."""
     flat: dict[str, Any] = dict(raw)
 
     fields = raw.get("Fields")
@@ -46,8 +55,25 @@ def _normalize_fields_dict(raw: dict[str, Any]) -> dict[str, Any]:
             name = item.get("Name") or item.get("name")
             if name and value is not None:
                 flat[str(name)] = value
+            title = item.get("Title") or item.get("title")
+            if title and value is not None:
+                flat[str(title).strip()] = value
 
     return flat
+
+
+def _apply_label_mappings(flat: dict[str, Any], row: dict[str, Any]) -> None:
+    """Fill qualifier columns from Wufoo field titles when FieldN ids are stale."""
+    title_map = dict(FORM_LABEL_TO_COLUMN)
+    extra = _load_title_map()
+    title_map.update(extra)
+
+    for key, value in flat.items():
+        if value is None or not str(value).strip():
+            continue
+        col = title_map.get(str(key).strip())
+        if col and not str(row.get(col, "")).strip():
+            row[col] = value
 
 
 def wufoo_payload_to_lead_row(payload: dict[str, Any]) -> dict[str, Any]:
@@ -78,6 +104,8 @@ def wufoo_payload_to_lead_row(payload: dict[str, Any]) -> dict[str, Any]:
             value = flat.get(candidate)
             if value is not None and str(value).strip():
                 row[qualifier_col] = value
+
+    _apply_label_mappings(flat, row)
 
     return row
 
