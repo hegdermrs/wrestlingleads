@@ -24,6 +24,15 @@
     "UTM Term": "UTM Term",
     "UTM Content": "UTM Content"
   },
+  "wufoo_title_to_qualifier_map": {
+    "Which best describes you...": "Job Title",
+    "Cell Phone Number (Parent)": "Phone Number",
+    "Is there a deadline for this goal?": "Deadline for Goal",
+    "Reason for Inquiry (choose one)": "Job function",
+    "How willing is your wrestler to start mindset training?": "Relationship Status",
+    "Where did you hear about Wrestling Mindset?": "Source",
+    "Which best describes your preferred investment level?": "Investment Level"
+  },
   "qualifier_to_hubspot_map": {
     "AI Score": "ai_score",
     "AI Tier": "ai_tier",

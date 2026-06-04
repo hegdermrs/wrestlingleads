@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ..lead_form_fields import FORM_LABEL_TO_COLUMN
+from ..lead_form_fields import FORM_LABEL_TO_COLUMN, column_for_wufoo_title, normalize_wufoo_title
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 WOOFOO_MAP_PATH = BASE_DIR / "config" / "wufoo_field_map.json"
@@ -57,7 +57,9 @@ def _normalize_fields_dict(raw: dict[str, Any]) -> dict[str, Any]:
                 flat[str(name)] = value
             title = item.get("Title") or item.get("title")
             if title and value is not None:
-                flat[str(title).strip()] = value
+                t = str(title).strip()
+                flat[t] = value
+                flat[normalize_wufoo_title(t)] = value
 
     return flat
 
@@ -65,13 +67,12 @@ def _normalize_fields_dict(raw: dict[str, Any]) -> dict[str, Any]:
 def _apply_label_mappings(flat: dict[str, Any], row: dict[str, Any]) -> None:
     """Fill qualifier columns from Wufoo field titles when FieldN ids are stale."""
     title_map = dict(FORM_LABEL_TO_COLUMN)
-    extra = _load_title_map()
-    title_map.update(extra)
+    title_map.update(_load_title_map())
 
     for key, value in flat.items():
         if value is None or not str(value).strip():
             continue
-        col = title_map.get(str(key).strip())
+        col = column_for_wufoo_title(str(key)) or title_map.get(str(key).strip())
         if col and not str(row.get(col, "")).strip():
             row[col] = value
 
