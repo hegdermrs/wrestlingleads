@@ -16,6 +16,7 @@ import httpx
 import pandas as pd
 
 from .features import _safe_str
+from .lead_form_fields import form_entries_for_row, lead_display_name
 
 RAILWAY_SMTP_HINT = (
     "Railway blocks outbound Gmail SMTP on Free and Hobby plans (Network unreachable). "
@@ -308,7 +309,13 @@ _EMAIL_ACCENT = "#2563eb"
 
 
 def _html_row(label: str, value: object) -> str:
-    val = _esc(value) if _safe_str(value) else "—"
+    raw = _safe_str(value)
+    if not raw:
+        val = "—"
+    elif "\n" in raw:
+        val = _nl2br(value)
+    else:
+        val = _esc(value)
     return f"""
       <tr>
         <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:13px;width:120px;vertical-align:top;">{label}</td>
@@ -320,12 +327,9 @@ def _build_assignment_html(
     *,
     rep_first: str,
     name: str,
-    route_reason: str,
-    grade: str,
-    goal: str,
     row: pd.Series | dict[str, Any],
 ) -> str:
-    message = _lead_field(row, "Message") or "—"
+    form_rows = "".join(_html_row(label, val) for label, val in form_entries_for_row(row))
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -344,8 +348,7 @@ def _build_assignment_html(
           <td style="padding:24px;">
             <p style="margin:0 0 16px;font-size:15px;color:#334155;">Hi {_esc(rep_first)},</p>
             <p style="margin:0 0 20px;font-size:15px;color:#334155;line-height:1.6;">
-              A new lead has been assigned to you.
-              <strong style="color:#0f172a;">{_esc(route_reason)}</strong>
+              A new lead has been assigned to you. Here is what they submitted on your form:
             </p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
               <tr>
@@ -355,17 +358,8 @@ def _build_assignment_html(
               </tr>
             </table>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:20px;">
-              {_html_row("Email", _lead_field(row, "Email"))}
-              {_html_row("Phone", _lead_field(row, "Phone Number") or "—")}
-              {_html_row("State", _lead_field(row, "State/Region") or "—")}
-              {_html_row("Grade", grade)}
-              {_html_row("Buyer type", _lead_field(row, "Job Title") or "—")}
-              {_html_row("Readiness", _lead_field(row, "Relationship Status") or "—")}
+              {form_rows}
             </table>
-            <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;">Goal</p>
-            <div style="margin:0 0 20px;padding:14px 16px;background:#f8fafc;border-left:4px solid {_EMAIL_ACCENT};border-radius:0 8px 8px 0;font-size:14px;line-height:1.6;color:#334155;">{_nl2br(goal)}</div>
-            <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;">Message</p>
-            <div style="margin:0;padding:14px 16px;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;line-height:1.6;color:#0f172a;">{_nl2br(message)}</div>
           </td>
         </tr>
         <tr>
@@ -386,48 +380,20 @@ def build_assignment_email(
     assignment: dict[str, Any],
 ) -> tuple[str, str, str]:
     """Return subject, plain text body, html body."""
-    name = _lead_name(row)
+    name = lead_display_name(row)
     subject = f"New wrestling lead: {name}"
 
-    grade = _lead_field(row, "Wrestler's Grade") or "—"
-    goal = _lead_field(row, "Wrestler's Goal") or "—"
     rep_first = _safe_str(rep.get("name", "there")).split()[0] or "there"
-    route_reason = _safe_str(assignment.get("route_reason", ""))
 
-    lines = [
-        f"Hi {rep_first},",
-        "",
-        "NEW LEAD ASSIGNED",
-        f"Reason: {route_reason}",
-        "",
-        name,
-        "",
-        "CONTACT",
-        f"  Email:   {_lead_field(row, 'Email')}",
-        f"  Phone:   {_lead_field(row, 'Phone Number') or '—'}",
-        f"  State:   {_lead_field(row, 'State/Region') or '—'}",
-        "",
-        "DETAILS",
-        f"  Grade:      {grade}",
-        f"  Buyer:      {_lead_field(row, 'Job Title') or '—'}",
-        f"  Readiness:  {_lead_field(row, 'Relationship Status') or '—'}",
-        "",
-        "GOAL",
-        goal,
-        "",
-        "MESSAGE",
-        _lead_field(row, "Message") or "—",
-        "",
-        "— LeadsWrestling",
-    ]
+    lines = [f"Hi {rep_first},", "", "NEW LEAD ASSIGNED", "", name, ""]
+    for label, val in form_entries_for_row(row):
+        lines.append(f"{label}: {val}")
+    lines.extend(["", "— LeadsWrestling"])
     text = "\n".join(lines)
 
     html = _build_assignment_html(
         rep_first=rep_first,
         name=name,
-        route_reason=route_reason,
-        grade=grade,
-        goal=goal,
         row=row,
     )
 

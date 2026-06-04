@@ -15,18 +15,10 @@ import Toast from "../components/ui/Toast.jsx";
 import LoadingSkeleton from "../components/ui/LoadingSkeleton.jsx";
 import Badge from "../components/ui/Badge.jsx";
 import { BUCKET_INFO } from "../constants/labels.js";
-import { REP_SCORING_FIELDS } from "../constants/repScoringFields.js";
+import DistributionPanel from "../components/team/DistributionPanel.jsx";
 
 function repBucketClass(bucket) {
   return BUCKET_INFO[bucket]?.color || "rep-general";
-}
-
-function defaultRoleLabel(rep) {
-  return rep.role_label || BUCKET_INFO[rep.bucket]?.title || "Sales rep";
-}
-
-function defaultDescription(rep) {
-  return rep.description ?? BUCKET_INFO[rep.bucket]?.hint ?? "";
 }
 
 function parseWeeklyCap(value) {
@@ -88,14 +80,8 @@ export default function Rules() {
     try {
       const payload = {
         ...rules,
-        west_coast_states: (rules.west_coast_states || [])
-          .flatMap((s) => String(s).split(/[,\s]+/))
-          .map((s) => s.trim().toUpperCase())
-          .filter(Boolean),
         reps: (rules.reps || []).map((rep) => ({
           ...rep,
-          role_label: (rep.role_label || "").trim() || defaultRoleLabel({ ...rep, role_label: "" }),
-          description: (rep.description || "").trim() || defaultDescription({ ...rep, description: "" }),
           weekly_cap: parseWeeklyCap(rep.weekly_cap),
         })),
       };
@@ -207,8 +193,7 @@ export default function Rules() {
 
       <Card title="When a lead comes in" subtitle="Usually within about 30 seconds of the form" delay={60}>
         <p className="field-hint" style={{ marginBottom: "1rem" }}>
-          Each person&apos;s card below controls their share of leads and priority labels. Top-priority leads
-          ready to start can go to Gene before the normal split.
+          Turn on auto-assign and notifications here. Set percentages and scoring rules in the section below your team cards.
         </p>
         <Toggle
           checked={!!rules?.auto_route_enabled}
@@ -232,7 +217,7 @@ export default function Rules() {
 
       <Card
         title="Your team"
-        subtitle="Open each card to edit name, email, limits, and how leads are split — then Save changes"
+        subtitle="Name, email, and weekly limits — save when you change distribution below"
         delay={100}
       >
         <div className="team-grid">
@@ -240,8 +225,6 @@ export default function Rules() {
             const cap = parseWeeklyCap(rep.weekly_cap);
             const count = weekly[rep.id] ?? 0;
             const capPct = cap ? Math.min(100, (count / cap) * 100) : 0;
-            const isGeneral = rep.bucket === "general";
-
             return (
               <div key={rep.id || index} className={`team-card ${repBucketClass(rep.bucket)} animate-slide-up`} style={{ animationDelay: `${index * 70}ms` }}>
                 <div className="team-card-body">
@@ -249,94 +232,16 @@ export default function Rules() {
                     <div className="team-avatar" aria-hidden="true">
                       {rep.name?.charAt(0) || "?"}
                     </div>
-                    <div className="team-card-fields">
-                      <label className="field-label">
-                        Role (shown on emails)
-                        <input
-                          className="input team-role-input"
-                          value={rep.role_label ?? ""}
-                          onChange={(e) => updateRep(index, "role_label", e.target.value)}
-                          placeholder={BUCKET_INFO[rep.bucket]?.title || "Sales rep"}
-                        />
-                      </label>
-                      <label className="field-label">
-                        Name
-                        <input
-                          className="input team-name-input"
-                          value={rep.name || ""}
-                          onChange={(e) => updateRep(index, "name", e.target.value)}
-                          placeholder="Full name"
-                        />
-                      </label>
-                    </div>
+                    <label className="field-label team-name-field">
+                      Name
+                      <input
+                        className="input team-name-input"
+                        value={rep.name || ""}
+                        onChange={(e) => updateRep(index, "name", e.target.value)}
+                        placeholder="Full name"
+                      />
+                    </label>
                   </div>
-
-                  <label className="field-label">
-                    What leads they get
-                    <textarea
-                      className="input team-desc-input"
-                      rows={2}
-                      value={rep.description ?? ""}
-                      onChange={(e) => updateRep(index, "description", e.target.value)}
-                      placeholder={BUCKET_INFO[rep.bucket]?.hint || "What kinds of leads go here"}
-                    />
-                  </label>
-
-                  {(REP_SCORING_FIELDS[rep.bucket] || []).length > 0 && (
-                    <div className="team-scoring-block">
-                      <p className="team-scoring-title">Lead split & priorities</p>
-                      {(REP_SCORING_FIELDS[rep.bucket] || []).map((field) => {
-                        const editHere = !field.editOnRepId || field.editOnRepId === rep.id;
-                        if (!editHere) {
-                          return (
-                            <p key={field.rulesKey || field.rubricKey} className="field-hint team-scoring-readonly">
-                              {field.label} — edit on Beau&apos;s card
-                            </p>
-                          );
-                        }
-
-                        let value = "";
-                        let onChange = () => {};
-
-                        if (field.rulesKey) {
-                          value = rules?.[field.rulesKey] ?? "";
-                          onChange = (e) =>
-                            setRules((prev) => ({ ...prev, [field.rulesKey]: e.target.value }));
-                        } else if (field.rubricKey) {
-                          value = rubric[field.rubricKey] ?? "";
-                          onChange = (e) =>
-                            setRubric((prev) => ({ ...prev, [field.rubricKey]: e.target.value }));
-                        } else if (field.scoringKey === "coaching_score_boost") {
-                          value = coachingBoost;
-                          onChange = (e) => setCoachingBoost(e.target.value);
-                        } else if (field.scoringKey === "icp_llm_min") {
-                          value = icpLlmMin;
-                          onChange = (e) => setIcpLlmMin(e.target.value);
-                        }
-
-                        return (
-                          <label key={field.rulesKey || field.rubricKey || field.scoringKey} className="rubric-row">
-                            <span className="rubric-label">
-                              <strong>{field.label}</strong>
-                            </span>
-                            <div className="rubric-input-wrap">
-                              {field.prefix && <span className="rubric-prefix">{field.prefix}</span>}
-                              <input
-                                className="input rubric-input"
-                                type="number"
-                                min={field.min ?? 0}
-                                max={field.max ?? 100}
-                                step={field.step ?? 1}
-                                value={value}
-                                onChange={onChange}
-                              />
-                              {field.suffix && <span className="rubric-prefix">{field.suffix}</span>}
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
 
                   {rep.bucket !== "automation" && (
                   <label className="field-label">
@@ -380,17 +285,6 @@ export default function Rules() {
                     </div>
                   </div>
 
-                  <div className={`team-card-toggle ${isGeneral ? "" : "is-spacer"}`}>
-                    {isGeneral && (
-                      <Toggle
-                        checked={!!rep.west_coast_priority}
-                        onChange={(v) => updateRep(index, "west_coast_priority", v)}
-                        label="West Coast priority"
-                        description="Gets West Coast states first"
-                        compact
-                      />
-                    )}
-                  </div>
                 </div>
               </div>
             );
@@ -398,19 +292,24 @@ export default function Rules() {
         </div>
       </Card>
 
-      <Card title="West Coast states" subtitle="These states go to Eric first, then Beau" delay={140}>
-        <input
-          className="input wide"
-          value={(rules?.west_coast_states || []).join(", ")}
-          onChange={(e) =>
-            setRules({ ...rules, west_coast_states: e.target.value.split(",").map((s) => s.trim()) })
-          }
-          placeholder="CA, OR, WA, NV, AZ, HI, AK"
+      <Card
+        title="Lead distribution & rules"
+        subtitle="One place to compare everyone — edit percentages and scoring, then Save changes at the top"
+        delay={120}
+      >
+        <DistributionPanel
+          rules={rules}
+          rubric={rubric}
+          coachingBoost={coachingBoost}
+          icpLlmMin={icpLlmMin}
+          onRulesChange={(key, value) => setRules((prev) => ({ ...prev, [key]: value }))}
+          onRubricChange={(key, value) => setRubric((prev) => ({ ...prev, [key]: value }))}
+          onCoachingBoostChange={setCoachingBoost}
+          onIcpLlmMinChange={setIcpLlmMin}
         />
-        <p className="field-hint">Uses the state from your form. Other states follow the normal Beau &amp; Eric split.</p>
       </Card>
 
-      <Card title="Try it" subtitle="Pick a lead from your inbox by email" delay={180}>
+      <Card title="Try it" subtitle="Pick a lead from your inbox by email" delay={140}>
         <div className="inline-form">
           <input
             className="input"

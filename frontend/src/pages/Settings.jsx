@@ -299,8 +299,8 @@ export default function Settings() {
 
       <Card title="Who gets which leads" subtitle="On the Team page" delay={50}>
         <p className="card-copy">
-          Each rep&apos;s card controls their share of leads and when someone is Priority, Good fit, or Low
-          priority. Open <Link to="/team">Team</Link> and click <strong>Save changes</strong> when you&apos;re done.
+          Open <Link to="/team">Team</Link> → section <strong>Lead distribution &amp; rules</strong> to set
+          percentages and inbox labels in one table. Click <strong>Save changes</strong> when done.
         </p>
       </Card>
 

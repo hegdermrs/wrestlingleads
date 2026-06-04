@@ -667,11 +667,64 @@ a {
 }
 
 .leads-detail-row td {
-  padding: 0.5rem 0.65rem 0.75rem;
-  font-size: 0.8rem;
+  padding: 0.85rem 0.75rem 1rem;
+  font-size: 0.85rem;
   color: var(--muted);
   background: rgba(99, 102, 241, 0.06);
   border-bottom: 1px solid var(--border);
+}
+
+.detail-section-title {
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.lead-form-details {
+  margin: 0 0 0.85rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.lead-form-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 38%) 1fr;
+  gap: 0.5rem 1rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.lead-form-row:last-child {
+  border-bottom: none;
+}
+
+.lead-form-row dt {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.lead-form-row dd {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lead-ai-reason {
+  margin: 0.65rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.leads-row.expandable {
+  cursor: pointer;
 }
 
 .detail-label {
@@ -846,7 +899,7 @@ a {
   align-items: stretch;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 960px) {
   .team-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -885,7 +938,13 @@ a {
 .team-card-head {
   display: flex;
   gap: 0.75rem;
-  align-items: flex-start;
+  align-items: center;
+}
+
+.team-name-field {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0 !important;
 }
 
 .team-card-fields {
@@ -1573,29 +1632,143 @@ a {
   text-align: right;
 }
 
-.team-scoring-block {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  background: var(--surface-elevated, #f8fafc);
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 8px;
+/* Lead distribution tables (Team page) */
+.dist-panel {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 2rem;
 }
 
-.team-scoring-title {
-  margin: 0 0 0.25rem;
+.dist-section-title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.dist-section-desc {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.dist-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.dist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.dist-table th,
+.dist-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.dist-table thead th {
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--muted, #64748b);
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.2);
 }
 
-.team-scoring-readonly {
-  margin: 0;
-  font-size: 0.8rem;
+.dist-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.dist-table tfoot td {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.dist-th-num,
+.dist-td-num {
+  width: 9rem;
+  text-align: right;
+}
+
+.dist-who {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.dist-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.dist-total-label {
+  font-weight: 600;
+  color: var(--muted);
+  text-align: right;
+}
+
+.dist-total-value {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dist-total-value.ok {
+  color: #86efac;
+}
+
+.dist-total-value.warn {
+  color: #fbbf24;
+}
+
+.dist-num-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.dist-affix {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.dist-num-input {
+  width: 4.5rem;
+  padding: 0.5rem 0.55rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.dist-num-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+@media (max-width: 640px) {
+  .dist-table th,
+  .dist-table td {
+    padding: 0.6rem 0.65rem;
+  }
+
+  .dist-note {
+    display: none;
+  }
 }
 
 .rubric-auto {

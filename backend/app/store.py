@@ -10,6 +10,7 @@ from typing import Any
 import pandas as pd
 
 from .config import BASE_DIR, DATA_DIR
+from .lead_form_fields import FORM_COLUMN_NAMES
 from .scorer import metrics_summary
 
 CACHE_PARQUET = DATA_DIR / "scored_cache.parquet"
@@ -22,25 +23,19 @@ ROOT_QUALIFIED = BASE_DIR / "qualified.xlsx"
 
 DISPLAY_COLUMNS = [
     "Record ID",
-    "First Name",
-    "Last Name",
-    "Email",
-    "Phone Number",
+    *FORM_COLUMN_NAMES,
     "Lifecycle Stage",
     "Lead Status",
-    "Job Title",
     "AI Score",
     "AI Tier",
     "ML Score",
     "LLM Score",
     "Recommended Action",
     "AI Reasons",
-    "Source",
     "Create Date",
     "Assigned Rep",
     "Assigned Email",
     "Route Bucket",
-    "Route Reason",
     "Routed At",
 ]
 

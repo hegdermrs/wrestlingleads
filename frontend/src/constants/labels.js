@@ -14,27 +14,12 @@ export const TIER_CLASS = {
   Unqualified: "tier-unqualified",
 };
 
+/** Card accent colors only (no boilerplate copy on Team cards). */
 export const BUCKET_INFO = {
-  urgent: {
-    title: "Top priority — Gene",
-    color: "rep-urgent",
-    hint: "Parents ready to start soon — your hottest opportunities",
-  },
-  hot_warm: {
-    title: "Strong leads — Jake",
-    color: "rep-hot",
-    hint: "Worth a quick call — not quite emergency level",
-  },
-  general: {
-    title: "General pool — Beau & Eric",
-    color: "rep-general",
-    hint: "Everyone else; Eric gets West Coast states first when enabled",
-  },
-  automation: {
-    title: "Automation only",
-    color: "rep-general",
-    hint: "Lower-fit leads — workflows only, no rep notification",
-  },
+  urgent: { title: "Gene", color: "rep-urgent", hint: "" },
+  hot_warm: { title: "Jake", color: "rep-hot", hint: "" },
+  general: { title: "Beau & Eric", color: "rep-general", hint: "" },
+  automation: { title: "Automation", color: "rep-general", hint: "" },
 };
 
 export function leadDisplayName(lead) {

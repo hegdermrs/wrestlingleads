@@ -9,6 +9,7 @@ import httpx
 import pandas as pd
 
 from .features import _safe_str
+from .lead_form_fields import form_entries_for_row
 from .routing_notify import build_assignment_email
 
 
@@ -45,6 +46,7 @@ def _lead_payload(row: pd.Series | dict[str, Any]) -> dict[str, Any]:
         "recommended_action": _safe_str(get("Recommended Action", "")),
         "create_date": _safe_str(get("Create Date", "")),
         "source": _safe_str(get("Source", "")),
+        "form": {label: val for label, val in form_entries_for_row(row)},
     }
 
 

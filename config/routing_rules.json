@@ -11,53 +11,41 @@
   "sync_hubspot_on_route": false,
   "urgent_min_score": 75,
   "jake_min_warm_score": 70,
-  "west_coast_states": ["CA", "OR", "WA", "NV", "AZ", "HI", "AK"],
   "reps": [
     {
       "id": "gene",
       "name": "Gene Zannetti",
       "email": "genezannetti@gmail.com",
       "bucket": "urgent",
-      "role_label": "Top 10% — Gene",
-      "weekly_cap": null,
-      "description": "Highest-scoring leads vs everyone else in the inbox"
+      "weekly_cap": null
     },
     {
       "id": "jake",
       "name": "Jake Hunter",
       "email": "jthunter600@gmail.com",
       "bucket": "hot_warm",
-      "role_label": "Next 20% — Jake",
-      "weekly_cap": null,
-      "description": "Strong leads in the 70th–90th percentile band"
+      "weekly_cap": null
     },
     {
       "id": "beau",
       "name": "Beau Tillman",
       "email": "beautillman80@gmail.com",
       "bucket": "general",
-      "role_label": "Middle 50% — Beau",
-      "weekly_cap": null,
-      "description": "Shared pool with Eric; balanced weekly count"
+      "weekly_cap": null
     },
     {
       "id": "eric",
       "name": "Eric Spencer",
       "email": "evspencer@gmail.com",
       "bucket": "general",
-      "role_label": "Middle 50% — Eric",
-      "weekly_cap": null,
-      "west_coast_priority": true,
-      "description": "West Coast leads prefer Eric when in the middle band"
+      "weekly_cap": null
     },
     {
       "id": "automation",
       "name": "Automation",
       "email": "",
       "bucket": "automation",
-      "role_label": "Bottom 20% — automation",
-      "weekly_cap": null,
-      "description": "HubSpot workflows / sequences only — no rep email"
+      "weekly_cap": null
     }
   ]
 }

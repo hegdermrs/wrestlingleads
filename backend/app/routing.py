@@ -15,6 +15,8 @@ from .routing_notify import send_lead_assignment_email, email_configured
 from .integrations.hubspot import hubspot_configured, sync_contact_on_route
 from .n8n_notify import n8n_configured, send_n8n_assignment_notification
 
+WEST_COAST_STATE_CODES = frozenset({"CA", "OR", "WA", "NV", "AZ", "HI", "AK"})
+WEST_COAST_REP_ID = "eric"
 WEST_COAST_NAME_HINTS = (
     "california",
     "oregon",
@@ -39,6 +41,13 @@ def _tier(row: pd.Series | dict[str, Any]) -> str:
     return _safe_str(get("AI Tier", ""))
 
 
+def _assigned_reason(rep: dict[str, Any], note: str = "") -> str:
+    name = _safe_str(rep.get("name")) or "rep"
+    if note:
+        return f"Assigned to {name} ({note})"
+    return f"Assigned to {name}"
+
+
 def _is_ready_now(row: pd.Series | dict[str, Any]) -> bool:
     get = row.get if isinstance(row, dict) else row.get
     rel = _safe_str(get("Relationship Status", "")).lower()
@@ -60,11 +69,10 @@ def _normalize_state(value: object) -> str:
     return text[:2] if len(text) >= 2 else text
 
 
-def is_west_coast(row: pd.Series | dict[str, Any], config: dict[str, Any]) -> bool:
+def is_west_coast(row: pd.Series | dict[str, Any]) -> bool:
     get = row.get if isinstance(row, dict) else row.get
     state = _normalize_state(get("State/Region", ""))
-    west = {s.upper() for s in config.get("west_coast_states", [])}
-    if state in west:
+    if state in WEST_COAST_STATE_CODES:
         return True
     region = _safe_str(get("State/Region", "")).lower()
     return any(hint in region for hint in WEST_COAST_NAME_HINTS)
@@ -181,22 +189,22 @@ def _pick_general_rep(row: pd.Series | dict[str, Any], config: dict[str, Any]) -
     if not general:
         raise ValueError("No general-pool reps configured.")
 
-    west = is_west_coast(row, config)
-    eric = next((r for r in general if r.get("west_coast_priority")), None)
-    beau = next((r for r in general if not r.get("west_coast_priority")), None)
+    west = is_west_coast(row)
+    eric = next((r for r in general if _safe_str(r.get("id")) == WEST_COAST_REP_ID), None)
+    beau = next((r for r in general if _safe_str(r.get("id")) != WEST_COAST_REP_ID), None)
 
     if west and eric:
-        return eric, "West Coast lead — Eric has priority"
+        return eric, _assigned_reason(eric, "West Coast")
 
     candidates = [r for r in general if r]
     if len(candidates) == 1:
-        return candidates[0], "General pool assignment"
+        return candidates[0], _assigned_reason(candidates[0])
 
     counts = {r["id"]: count_rep_this_week(_safe_str(r.get("id"))) for r in candidates}
     chosen = min(candidates, key=lambda r: counts.get(r["id"], 0))
     if west and eric and chosen.get("id") != eric.get("id"):
-        return eric, "West Coast lead — Eric has priority"
-    return chosen, "General pool — balanced weekly volume"
+        return eric, _assigned_reason(eric, "West Coast")
+    return chosen, _assigned_reason(chosen)
 
 
 def _assign_rep_percentile(
@@ -236,7 +244,7 @@ def _assign_rep_percentile(
             ("automation", "automation", f"Bottom {automation_pct:.0f}% — automation / nurture"),
         ]
 
-    for rep_key, route_bucket, reason in fallthrough:
+    for rep_key, route_bucket, _band_note in fallthrough:
         if rep_key == "general":
             rep, reason = _pick_general_rep(row, config)
             return {
@@ -253,7 +261,7 @@ def _assign_rep_percentile(
                 "assigned": True,
                 "rep": rep,
                 "route_bucket": route_bucket,
-                "route_reason": reason,
+                "route_reason": _assigned_reason(rep),
                 "distribution_band": band,
             }
 
@@ -269,11 +277,12 @@ def _assign_rep_percentile(
 
     auto_reps = reps_for_bucket(config, "automation")
     if auto_reps:
+        rep = auto_reps[0]
         return {
             "assigned": True,
-            "rep": auto_reps[0],
+            "rep": rep,
             "route_bucket": "automation",
-            "route_reason": fallthrough[0][2],
+            "route_reason": _assigned_reason(rep),
             "distribution_band": band,
         }
 
@@ -296,7 +305,7 @@ def _assign_rep_hybrid(
                     "assigned": True,
                     "rep": rep,
                     "route_bucket": "urgent",
-                    "route_reason": "Urgent red-hot — Priority tier, ready soon, meets urgent score",
+                    "route_reason": _assigned_reason(rep, "Priority lead"),
                     "distribution_band": "urgent",
                 }
     return _assign_rep_percentile(row, config)
@@ -315,19 +324,18 @@ def _assign_rep_tier(
                     "assigned": True,
                     "rep": rep,
                     "route_bucket": "urgent",
-                    "route_reason": "Urgent lead — ready to start soon",
+                    "route_reason": _assigned_reason(rep, "Priority lead"),
                 }
         # Fall through if Gene at cap
 
     if is_jake_tier(row, config):
         for rep in reps_for_bucket(config, "hot_warm"):
             if _rep_under_cap(rep):
-                reason = "Hot lead" if _tier(row) == "Hot" else "Very warm lead"
                 return {
                     "assigned": True,
                     "rep": rep,
                     "route_bucket": "hot_warm",
-                    "route_reason": reason,
+                    "route_reason": _assigned_reason(rep),
                 }
 
     rep, reason = _pick_general_rep(row, config)

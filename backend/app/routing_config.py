@@ -34,9 +34,16 @@ def default_rules() -> dict[str, Any]:
         "send_email_on_route": True,
         "urgent_min_score": 75,
         "jake_min_warm_score": 70,
-        "west_coast_states": ["CA", "OR", "WA", "NV", "AZ", "HI", "AK"],
         "reps": [],
     }
+
+
+def _strip_legacy_routing_keys(config: dict[str, Any]) -> dict[str, Any]:
+    config.pop("west_coast_states", None)
+    for rep in config.get("reps", []):
+        if isinstance(rep, dict):
+            rep.pop("west_coast_priority", None)
+    return config
 
 
 def load_routing_config() -> dict[str, Any]:
@@ -48,7 +55,8 @@ def load_routing_config() -> dict[str, Any]:
             ROUTING_CONFIG_PATH.write_text(
                 json.dumps(default_rules(), indent=2), encoding="utf-8"
             )
-    return json.loads(ROUTING_CONFIG_PATH.read_text(encoding="utf-8"))
+    config = json.loads(ROUTING_CONFIG_PATH.read_text(encoding="utf-8"))
+    return _strip_legacy_routing_keys(config)
 
 
 def save_routing_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -63,8 +71,9 @@ def save_routing_config(config: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"Rep {rep.get('name', '?')} must have an id.")
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    ROUTING_CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
-    return config
+    cleaned = _strip_legacy_routing_keys(dict(config))
+    ROUTING_CONFIG_PATH.write_text(json.dumps(cleaned, indent=2), encoding="utf-8")
+    return cleaned
 
 
 def get_rep_by_id(config: dict[str, Any], rep_id: str) -> dict[str, Any] | None:

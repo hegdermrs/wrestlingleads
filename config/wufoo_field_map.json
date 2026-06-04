@@ -17,7 +17,12 @@
     "Field340": "Relationship Status",
     "Field117": "Source",
     "Field445": "Investment Level",
-    "Field113": "Message"
+    "Field113": "Message",
+    "UTM Source": "UTM Source",
+    "UTM Medium": "UTM Medium",
+    "UTM Campaign": "UTM Campaign",
+    "UTM Term": "UTM Term",
+    "UTM Content": "UTM Content"
   },
   "qualifier_to_hubspot_map": {
     "AI Score": "ai_score",

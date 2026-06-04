@@ -31,7 +31,6 @@ class RoutingRulesUpdate(BaseModel):
     sync_hubspot_on_route: bool = True
     urgent_min_score: float = 75
     jake_min_warm_score: float = 70
-    west_coast_states: list[str] = Field(default_factory=list)
     reps: list[dict[str, Any]]
 
 
