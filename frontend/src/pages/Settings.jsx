@@ -13,7 +13,6 @@ import {
   fetchJson,
   fetchIcpProfile,
   saveIcpProfile,
-  testHubspotConnection,
   testN8nWebhook,
   testSmtpConnection,
   uploadBaseline,
@@ -40,7 +39,6 @@ export default function Settings() {
   const [icpSaving, setIcpSaving] = useState(false);
   const [smtpTesting, setSmtpTesting] = useState(false);
   const [n8nTesting, setN8nTesting] = useState(false);
-  const [hubspotTesting, setHubspotTesting] = useState(false);
 
   useEffect(() => {
     checkHealth().then(setHealth);
@@ -149,24 +147,6 @@ export default function Settings() {
       setError(err.message);
     } finally {
       setN8nTesting(false);
-    }
-  };
-
-  const handleHubspotTest = async () => {
-    setHubspotTesting(true);
-    setError("");
-    setMessage("");
-    try {
-      const result = await testHubspotConnection();
-      if (result.ok) {
-        setMessage(result.note || "HubSpot is connected.");
-      } else {
-        setError(result.error || "HubSpot test failed.");
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setHubspotTesting(false);
     }
   };
 
@@ -306,8 +286,8 @@ export default function Settings() {
 
       <Card delay={60}>
         <Accordion
-          title="Email, HubSpot & automation"
-          subtitle="For your admin or developer — optional until you want rep emails or CRM sync"
+          title="Email & n8n automation"
+          subtitle="Gmail via n8n webhook — HubSpot contact updates stay in your n8n workflow"
         >
           <div className="status-grid email-status-grid" style={{ marginBottom: "1rem" }}>
             <div className={`status-tile ${health?.smtp_configured ? "ok" : "warn"}`}>
@@ -318,9 +298,9 @@ export default function Settings() {
               <span>Email automation</span>
               <strong>{health?.n8n_configured ? "Ready" : "Not set up"}</strong>
             </div>
-            <div className={`status-tile ${health?.hubspot_configured ? "ok" : "warn"}`}>
-              <span>HubSpot</span>
-              <strong>{health?.hubspot_configured ? "Ready" : "Not set up"}</strong>
+            <div className="status-tile">
+              <span>HubSpot in app</span>
+              <strong>{health?.hubspot_configured ? "API on Railway" : "n8n only"}</strong>
             </div>
           </div>
 
@@ -348,24 +328,12 @@ export default function Settings() {
             {n8nTesting ? "Sending test…" : "Test automation"}
           </button>
           <p className="field-hint" style={{ marginTop: "0.75rem" }}>
-            <strong>HubSpot owner in n8n:</strong> paste each rep&apos;s <strong>HubSpot owner ID</strong> on
-            Team → Save. Webhook field: <code>rep.hubspot_owner_id</code> (empty until ID is saved). In the
-            HubSpot node use <strong>Contact Owner Name or ID</strong> ={" "}
-            <code>{`{{ Number($json.body.rep.hubspot_owner_id) }}`}</code> — do not add{" "}
-            <code>hubspot_owner_id</code> under Custom Properties (that causes “not supported”). Check{" "}
-            <code>rep.hubspot_owner_note</code> in the webhook if the ID is still empty.
+            <strong>Your HubSpot node in n8n</strong> updates the contact. This app only POSTs the webhook
+            (Gmail + lead fields). On <strong>Team</strong>, paste each rep&apos;s <strong>HubSpot owner ID</strong>{" "}
+            → Save, then in n8n <strong>Contact Owner Name or ID</strong> ={" "}
+            <code>{`{{ Number($json.body.rep.hubspot_owner_id) }}`}</code>. If empty, read{" "}
+            <code>body.rep.hubspot_owner_note</code> in the webhook execution.
           </p>
-
-          <h4 className="setup-option-title" style={{ marginTop: "1.25rem" }}>
-            HubSpot
-          </h4>
-          <p className="card-copy">
-            When connected, assigning a lead can update the HubSpot contact. Turn on{" "}
-            <strong>Update HubSpot when assigned</strong> on Team.
-          </p>
-          <button type="button" className="btn secondary" onClick={handleHubspotTest} disabled={hubspotTesting}>
-            {hubspotTesting ? "Testing…" : "Test HubSpot"}
-          </button>
 
           <p className="field-hint" style={{ marginTop: "1rem" }}>
             Need step-by-step env vars (Railway, Resend, tokens)? Ask whoever deployed the app — those details

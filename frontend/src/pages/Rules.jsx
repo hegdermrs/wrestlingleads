@@ -218,10 +218,10 @@ export default function Rules() {
           description="Sends a notification when email or automation is set up in Setup"
         />
         <Toggle
-          checked={rules?.sync_hubspot_on_route !== false}
+          checked={!!rules?.sync_hubspot_on_route}
           onChange={(v) => setRules({ ...rules, sync_hubspot_on_route: v })}
-          label="Update HubSpot when assigned"
-          description="Keeps the contact record in sync if HubSpot is connected"
+          label="Update HubSpot from this app (optional)"
+          description="Off when HubSpot runs in n8n only. Needs HUBSPOT_ACCESS_TOKEN on Railway."
         />
       </Card>
 
@@ -276,11 +276,7 @@ export default function Rules() {
                       list={hubspotOwners.length ? "hubspot-owners-list" : undefined}
                       value={rep.hubspot_owner_id ?? ""}
                       onChange={(e) => updateRep(index, "hubspot_owner_id", e.target.value.trim())}
-                      placeholder={
-                        rules?.hubspot_configured
-                          ? "Auto-fills if email matches HubSpot — or paste ID"
-                          : "Required for n8n owner (HubSpot → Users)"
-                      }
+                      placeholder="For n8n Contact owner — paste ID from HubSpot Users"
                     />
                   </label>
                   )}
@@ -331,17 +327,15 @@ export default function Rules() {
         </datalist>
       )}
 
-      {!rules?.hubspot_configured && (
-        <Card className="banner-warn" delay={115}>
-          <p>
-            <strong>HubSpot owner IDs:</strong> Railway has no <code>HUBSPOT_ACCESS_TOKEN</code>, so the
-            webhook cannot auto-fill <code>hubspot_owner_id</code>. Paste each rep&apos;s numeric owner ID on
-            their Team card (HubSpot → Settings → Users → open user → ID in the URL). In n8n use{" "}
-            <strong>Contact Owner Name or ID</strong> with{" "}
-            <code>{`{{ Number($json.body.rep.hubspot_owner_id) }}`}</code> — not a custom property.
-          </p>
-        </Card>
-      )}
+      <Card className="banner-warn" delay={115}>
+        <p>
+          <strong>HubSpot runs in n8n</strong> — this app does not update HubSpot (leave{" "}
+          <em>Update HubSpot from this app</em> off). The webhook still sends contact data to n8n. Paste each
+          rep&apos;s <strong>HubSpot owner ID</strong> on their card so n8n gets{" "}
+          <code>body.rep.hubspot_owner_id</code>. In your HubSpot node: <strong>Contact Owner Name or ID</strong>{" "}
+          = <code>{`{{ Number($json.body.rep.hubspot_owner_id) }}`}</code>.
+        </p>
+      </Card>
 
       <Card
         title="Lead distribution & rules"

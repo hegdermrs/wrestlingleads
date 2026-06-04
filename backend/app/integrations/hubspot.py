@@ -102,8 +102,8 @@ def hubspot_owner_resolve_note(rep: dict[str, Any]) -> str:
         return "Rep has no email on Team — add email or HubSpot owner ID."
     if not hubspot_configured():
         return (
-            "HUBSPOT_ACCESS_TOKEN is not set on Railway — auto-match disabled. "
-            "Paste each rep's HubSpot owner ID on Team (HubSpot → Settings → Users)."
+            "HubSpot is handled in n8n, not on Railway. Paste this rep's HubSpot owner ID on "
+            "Team → Save (HubSpot → Settings → Users → open user → numeric ID in the URL)."
         )
     try:
         owners = _owners_by_email()
