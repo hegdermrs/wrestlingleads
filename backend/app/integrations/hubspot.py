@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,10 @@ from ..features import _safe_str
 BASE_DIR = Path(__file__).resolve().parents[3]
 HUBSPOT_MAP_PATH = BASE_DIR / "config" / "hubspot_field_map.json"
 HUBSPOT_API = "https://api.hubapi.com/crm/v3/objects/contacts"
+HUBSPOT_OWNERS_API = "https://api.hubapi.com/crm/v3/owners"
+_OWNERS_CACHE_TTL_SEC = 300
+_owners_by_email_cache: dict[str, str] = {}
+_owners_cache_loaded_at: float = 0.0
 
 
 def hubspot_configured() -> bool:
@@ -46,6 +51,64 @@ def lead_row_to_hubspot_properties(row: pd.Series | dict[str, Any]) -> dict[str,
     return properties
 
 
+def _fetch_owners_by_email(token: str) -> dict[str, str]:
+    """Map HubSpot owner user email → owner id (paginated)."""
+    by_email: dict[str, str] = {}
+    after: str | None = None
+    with httpx.Client(timeout=20.0) as client:
+        while True:
+            params: dict[str, str | int] = {"limit": 100}
+            if after:
+                params["after"] = after
+            response = client.get(
+                HUBSPOT_OWNERS_API,
+                headers=_headers(token),
+                params=params,
+            )
+            if response.status_code >= 400:
+                raise RuntimeError(_api_error(response))
+            body = response.json()
+            for row in body.get("results", []):
+                owner_id = _safe_str(row.get("id"))
+                email = _safe_str(row.get("email")).lower()
+                if owner_id and email:
+                    by_email[email] = owner_id
+            after = (body.get("paging") or {}).get("next", {}).get("after")
+            if not after:
+                break
+    return by_email
+
+
+def _owners_by_email() -> dict[str, str]:
+    global _owners_by_email_cache, _owners_cache_loaded_at
+    token = os.getenv("HUBSPOT_ACCESS_TOKEN", "").strip()
+    if not token:
+        return {}
+    now = time.time()
+    if _owners_by_email_cache and now - _owners_cache_loaded_at < _OWNERS_CACHE_TTL_SEC:
+        return _owners_by_email_cache
+    _owners_by_email_cache = _fetch_owners_by_email(token)
+    _owners_cache_loaded_at = now
+    return _owners_by_email_cache
+
+
+def hubspot_owner_id_for_rep(rep: dict[str, Any]) -> str:
+    """
+    Contact owner on sync: explicit hubspot_owner_id on the rep, else match rep email
+    to a HubSpot owner user.
+    """
+    manual = _safe_str(rep.get("hubspot_owner_id"))
+    if manual:
+        return manual
+    rep_email = _safe_str(rep.get("email")).lower()
+    if not rep_email or not hubspot_configured():
+        return ""
+    try:
+        return _owners_by_email().get(rep_email, "")
+    except Exception:
+        return ""
+
+
 def _assignment_properties(
     rep: dict[str, Any],
     assignment: dict[str, Any],
@@ -55,7 +118,7 @@ def _assignment_properties(
         "lw_route_reason": _safe_str(assignment.get("route_reason")),
         "lw_assigned_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    owner_id = _safe_str(rep.get("hubspot_owner_id"))
+    owner_id = hubspot_owner_id_for_rep(rep)
     if owner_id:
         props["hubspot_owner_id"] = owner_id
     return {k: v for k, v in props.items() if v}
@@ -206,7 +269,16 @@ def sync_contact_on_route(
     record_id = _hubspot_record_id(row)
     if record_id:
         properties["_record_id"] = record_id
-    return create_or_update_contact(properties)
+    result = create_or_update_contact(properties)
+    owner_id = hubspot_owner_id_for_rep(rep)
+    if owner_id:
+        result["hubspot_owner_id"] = owner_id
+    elif _safe_str(rep.get("email")):
+        result["hubspot_owner_note"] = (
+            f"No HubSpot owner user found for {_safe_str(rep.get('email'))} — "
+            "add hubspot_owner_id on the rep or use the same email in HubSpot Users."
+        )
+    return result
 
 
 def verify_hubspot_connection() -> dict[str, Any]:
@@ -230,8 +302,17 @@ def verify_hubspot_connection() -> dict[str, Any]:
     except Exception as exc:
         return {"ok": False, "error": str(exc), "transport": "hubspot"}
 
+    owner_count = 0
+    try:
+        owner_count = len(_owners_by_email())
+    except Exception:
+        pass
+
     return {
         "ok": True,
         "transport": "hubspot",
-        "note": "Token can read HubSpot owners. Contacts sync on each route when enabled in Team rules.",
+        "note": (
+            f"Token OK — {owner_count} HubSpot owner(s) loaded. "
+            "On route, contact owner is set from each rep's hubspot_owner_id or rep email match."
+        ),
     }

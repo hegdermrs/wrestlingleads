@@ -9,6 +9,7 @@ import httpx
 import pandas as pd
 
 from .features import _safe_str
+from .integrations.hubspot import hubspot_owner_id_for_rep
 from .lead_form_fields import form_entries_for_row
 from .routing_notify import build_assignment_email
 
@@ -43,9 +44,17 @@ def _lead_payload(row: pd.Series | dict[str, Any]) -> dict[str, Any]:
         "relationship_status": _safe_str(get("Relationship Status", "")),
         "wrestler_goal": _safe_str(get("Wrestler's Goal", "")),
         "wrestler_grade": _safe_str(get("Wrestler's Grade", "")),
+        "years_experience": _safe_str(get("Years experience", "")),
+        "deadline_for_goal": _safe_str(get("Deadline for Goal", "")),
+        "investment_level": _safe_str(get("Investment Level", "")),
+        "ai_score": _safe_str(get("AI Score", "")),
+        "ai_tier": _safe_str(get("AI Tier", "")),
         "recommended_action": _safe_str(get("Recommended Action", "")),
         "create_date": _safe_str(get("Create Date", "")),
         "source": _safe_str(get("Source", "")),
+        "utm_source": _safe_str(get("UTM Source", "")),
+        "utm_medium": _safe_str(get("UTM Medium", "")),
+        "utm_campaign": _safe_str(get("UTM Campaign", "")),
         "form": {label: val for label, val in form_entries_for_row(row)},
     }
 
@@ -58,6 +67,7 @@ def build_n8n_payload(
     test: bool = False,
 ) -> dict[str, Any]:
     subject, text, html = build_assignment_email(row, rep, assignment)
+    owner_id = hubspot_owner_id_for_rep(rep)
     return {
         "event": "lead_assignment_test" if test else "lead_assigned",
         "test": test,
@@ -67,6 +77,7 @@ def build_n8n_payload(
             "name": _safe_str(rep.get("name", "")),
             "email": _safe_str(rep.get("email", "")),
             "bucket": _safe_str(rep.get("bucket", "")),
+            "hubspot_owner_id": owner_id,
         },
         "assignment": {
             "route_bucket": assignment.get("route_bucket", ""),

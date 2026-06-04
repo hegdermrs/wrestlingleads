@@ -347,6 +347,13 @@ export default function Settings() {
           <button type="button" className="btn secondary" onClick={handleN8nTest} disabled={n8nTesting}>
             {n8nTesting ? "Sending test…" : "Test automation"}
           </button>
+          <p className="field-hint" style={{ marginTop: "0.75rem" }}>
+            <strong>HubSpot in n8n:</strong> on Create/update contact, add field <strong>Contact Owner</strong> ={" "}
+            <code>{`{{ $json.body.rep.hubspot_owner_id }}`}</code> (needs latest app deploy). Rep Gmail on Team must
+            match their HubSpot user email. Custom props: <code>lw_assigned_rep</code>,{" "}
+            <code>lw_route_reason</code>, <code>wrestler_goal</code>, <code>wrestler_grade</code> (not{" "}
+            <code>wrestler_s_grade</code> unless that is your HubSpot internal name).
+          </p>
 
           <h4 className="setup-option-title" style={{ marginTop: "1.25rem" }}>
             HubSpot
