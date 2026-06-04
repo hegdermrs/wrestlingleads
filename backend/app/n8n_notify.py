@@ -9,7 +9,7 @@ import httpx
 import pandas as pd
 
 from .features import _safe_str
-from .integrations.hubspot import hubspot_owner_id_for_rep
+from .integrations.hubspot import hubspot_owner_id_for_rep, hubspot_owner_resolve_note
 from .lead_form_fields import form_entries_for_row
 from .routing_notify import build_assignment_email
 
@@ -70,6 +70,7 @@ def _rep_payload_for_n8n(rep: dict[str, Any]) -> dict[str, Any]:
     owner_id = hubspot_owner_id_for_rep(rep)
     if owner_id.isdigit():
         payload["hubspot_owner_id"] = int(owner_id)
+    payload["hubspot_owner_note"] = hubspot_owner_resolve_note(rep)
     return payload
 
 
@@ -155,35 +156,36 @@ def verify_n8n_connection() -> dict[str, Any]:
         "Job Title": "Parent Seeking 1-1 Coaching for Child",
         "Relationship Status": "Ready to start now",
     }
-    sample_rep = {
-        "id": "test-rep",
-        "name": "Test Rep",
-        "email": "rep@example.com",
-        "bucket": "general",
-    }
-    # Use a real Team rep email on Railway if you want hubspot_owner_id in the test payload.
+    from .routing_config import load_routing_config
+
+    config = load_routing_config()
+    sample_rep = next(
+        (r for r in config.get("reps", []) if _safe_str(r.get("email")) and r.get("bucket") != "automation"),
+        {
+            "id": "test-rep",
+            "name": "Test Rep",
+            "email": "rep@example.com",
+            "bucket": "general",
+        },
+    )
     sample_assignment = {
         "route_bucket": "general",
         "route_reason": "LeadsWrestling n8n connection test",
     }
 
+    test_payload = build_n8n_payload(sample_row, sample_rep, sample_assignment, test=True)
     try:
-        result = _post_to_n8n(
-            build_n8n_payload(sample_row, sample_rep, sample_assignment, test=True)
-        )
+        result = _post_to_n8n(test_payload)
     except Exception as exc:
         return {"ok": False, "error": str(exc), "transport": "n8n"}
 
-    test_payload = build_n8n_payload(sample_row, sample_rep, sample_assignment, test=True)
-    owner_note = ""
-    if test_payload.get("rep", {}).get("hubspot_owner_id") is None:
-        owner_note = " Test rep has no hubspot_owner_id — route a real lead to test owner mapping."
-
+    rep_block = test_payload.get("rep", {})
     return {
         "ok": True,
         "transport": "n8n",
         "status_code": result.get("status_code"),
-        "note": f"Test payload sent to n8n.{owner_note} Check execution → Webhook → body.rep.",
+        "hubspot_owner_id": rep_block.get("hubspot_owner_id"),
+        "note": rep_block.get("hubspot_owner_note", "Check n8n → Webhook → body.rep."),
     }
 
 

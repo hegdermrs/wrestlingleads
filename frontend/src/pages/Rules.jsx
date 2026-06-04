@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  fetchHubspotOwners,
   fetchJson,
   fetchRoutingRules,
   fetchRoutingStats,
@@ -39,6 +40,7 @@ export default function Rules() {
   const [rubric, setRubric] = useState({ Hot: 68, Warm: 42, Cold: 18 });
   const [coachingBoost, setCoachingBoost] = useState(8);
   const [icpLlmMin, setIcpLlmMin] = useState(68);
+  const [hubspotOwners, setHubspotOwners] = useState([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -64,6 +66,14 @@ export default function Rules() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (rules?.hubspot_configured) {
+      fetchHubspotOwners()
+        .then((data) => setHubspotOwners(data?.owners || []))
+        .catch(() => setHubspotOwners([]));
+    }
+  }, [rules?.hubspot_configured]);
 
   const updateRep = (index, field, value) => {
     setRules((prev) => {
@@ -258,6 +268,25 @@ export default function Rules() {
 
                   {rep.bucket !== "automation" && (
                   <label className="field-label">
+                    HubSpot owner ID
+                    <input
+                      className="input"
+                      type="text"
+                      inputMode="numeric"
+                      list={hubspotOwners.length ? "hubspot-owners-list" : undefined}
+                      value={rep.hubspot_owner_id ?? ""}
+                      onChange={(e) => updateRep(index, "hubspot_owner_id", e.target.value.trim())}
+                      placeholder={
+                        rules?.hubspot_configured
+                          ? "Auto-fills if email matches HubSpot — or paste ID"
+                          : "Required for n8n owner (HubSpot → Users)"
+                      }
+                    />
+                  </label>
+                  )}
+
+                  {rep.bucket !== "automation" && (
+                  <label className="field-label">
                     Weekly limit
                     <input
                       className="input cap-input"
@@ -291,6 +320,28 @@ export default function Rules() {
           })}
         </div>
       </Card>
+
+      {hubspotOwners.length > 0 && (
+        <datalist id="hubspot-owners-list">
+          {hubspotOwners.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name} ({o.email})
+            </option>
+          ))}
+        </datalist>
+      )}
+
+      {!rules?.hubspot_configured && (
+        <Card className="banner-warn" delay={115}>
+          <p>
+            <strong>HubSpot owner IDs:</strong> Railway has no <code>HUBSPOT_ACCESS_TOKEN</code>, so the
+            webhook cannot auto-fill <code>hubspot_owner_id</code>. Paste each rep&apos;s numeric owner ID on
+            their Team card (HubSpot → Settings → Users → open user → ID in the URL). In n8n use{" "}
+            <strong>Contact Owner Name or ID</strong> with{" "}
+            <code>{`{{ Number($json.body.rep.hubspot_owner_id) }}`}</code> — not a custom property.
+          </p>
+        </Card>
+      )}
 
       <Card
         title="Lead distribution & rules"

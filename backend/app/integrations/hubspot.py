@@ -92,10 +92,37 @@ def _owners_by_email() -> dict[str, str]:
     return _owners_by_email_cache
 
 
+def hubspot_owner_resolve_note(rep: dict[str, Any]) -> str:
+    """Human-readable reason owner id is present or missing (for n8n webhook debug)."""
+    manual = _safe_str(rep.get("hubspot_owner_id"))
+    if manual:
+        return f"Using HubSpot owner ID {manual} from Team settings."
+    rep_email = _safe_str(rep.get("email")).lower()
+    if not rep_email:
+        return "Rep has no email on Team — add email or HubSpot owner ID."
+    if not hubspot_configured():
+        return (
+            "HUBSPOT_ACCESS_TOKEN is not set on Railway — auto-match disabled. "
+            "Paste each rep's HubSpot owner ID on Team (HubSpot → Settings → Users)."
+        )
+    try:
+        owners = _owners_by_email()
+        if rep_email in owners:
+            return f"Matched HubSpot user {rep_email} → owner {owners[rep_email]}."
+        emails = ", ".join(sorted(owners.keys())[:8])
+        suffix = "…" if len(owners) > 8 else ""
+        return (
+            f"No HubSpot user for {rep_email}. Token sees: {emails}{suffix}. "
+            "Fix Team email or paste owner ID on Team."
+        )
+    except Exception as exc:
+        return f"HubSpot owners API failed: {exc}"
+
+
 def hubspot_owner_id_for_rep(rep: dict[str, Any]) -> str:
     """
     Contact owner on sync: explicit hubspot_owner_id on the rep, else match rep email
-    to a HubSpot owner user.
+    to a HubSpot owner user (requires HUBSPOT_ACCESS_TOKEN on Railway).
     """
     manual = _safe_str(rep.get("hubspot_owner_id"))
     if manual:
@@ -107,6 +134,40 @@ def hubspot_owner_id_for_rep(rep: dict[str, Any]) -> str:
         return _owners_by_email().get(rep_email, "")
     except Exception:
         return ""
+
+
+def list_hubspot_owners() -> list[dict[str, str]]:
+    """All HubSpot owners for Team UI / troubleshooting."""
+    if not hubspot_configured():
+        return []
+    token = os.getenv("HUBSPOT_ACCESS_TOKEN", "").strip()
+    owners: list[dict[str, str]] = []
+    after: str | None = None
+    with httpx.Client(timeout=20.0) as client:
+        while True:
+            params: dict[str, str | int] = {"limit": 100}
+            if after:
+                params["after"] = after
+            response = client.get(
+                HUBSPOT_OWNERS_API,
+                headers=_headers(token),
+                params=params,
+            )
+            if response.status_code >= 400:
+                raise RuntimeError(_api_error(response))
+            body = response.json()
+            for row in body.get("results", []):
+                oid = _safe_str(row.get("id"))
+                email = _safe_str(row.get("email"))
+                first = _safe_str(row.get("firstName"))
+                last = _safe_str(row.get("lastName"))
+                name = f"{first} {last}".strip() or email
+                if oid:
+                    owners.append({"id": oid, "email": email, "name": name})
+            after = (body.get("paging") or {}).get("next", {}).get("after")
+            if not after:
+                break
+    return owners
 
 
 def _assignment_properties(

@@ -354,6 +354,10 @@ export function testHubspotConnection() {
   return fetchJson("/routing/hubspot-test", { method: "POST" });
 }
 
+export function fetchHubspotOwners() {
+  return fetchJson("/routing/hubspot-owners");
+}
+
 export function fetchScoringRubric() {
   return fetchJson("/scoring/rubric");
 }

@@ -348,11 +348,12 @@ export default function Settings() {
             {n8nTesting ? "Sending test…" : "Test automation"}
           </button>
           <p className="field-hint" style={{ marginTop: "0.75rem" }}>
-            <strong>HubSpot owner in n8n:</strong> if Contact Owner says “value not supported”, use{" "}
-            <strong>Custom Properties</strong> → property <code>hubspot_owner_id</code> → value{" "}
-            <code>{`{{ $json.body.rep.hubspot_owner_id }}`}</code> (must be a number from a real route, not the
-            Setup test). Or expression mode: <code>{`{{ Number($json.body.rep.hubspot_owner_id) }}`}</code>. Rep
-            email on Team must match HubSpot Users.
+            <strong>HubSpot owner in n8n:</strong> paste each rep&apos;s <strong>HubSpot owner ID</strong> on
+            Team → Save. Webhook field: <code>rep.hubspot_owner_id</code> (empty until ID is saved). In the
+            HubSpot node use <strong>Contact Owner Name or ID</strong> ={" "}
+            <code>{`{{ Number($json.body.rep.hubspot_owner_id) }}`}</code> — do not add{" "}
+            <code>hubspot_owner_id</code> under Custom Properties (that causes “not supported”). Check{" "}
+            <code>rep.hubspot_owner_note</code> in the webhook if the ID is still empty.
           </p>
 
           <h4 className="setup-option-title" style={{ marginTop: "1.25rem" }}>

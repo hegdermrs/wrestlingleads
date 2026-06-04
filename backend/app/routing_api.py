@@ -12,7 +12,7 @@ from .routing_config import load_routing_config, save_routing_config
 from .routing_log import recent_entries, weekly_stats
 from .n8n_notify import n8n_configured, notify_configured, verify_n8n_connection
 from .routing_notify import email_configured, email_transport, verify_email_connection
-from .integrations.hubspot import hubspot_configured, verify_hubspot_connection
+from .integrations.hubspot import hubspot_configured, list_hubspot_owners, verify_hubspot_connection
 from .store import store
 
 router = APIRouter(prefix="/routing", tags=["routing"])
@@ -156,3 +156,19 @@ def n8n_test() -> dict[str, Any]:
 def hubspot_test() -> dict[str, Any]:
     """Verify HubSpot private app token (owners API)."""
     return verify_hubspot_connection()
+
+
+@router.get("/hubspot-owners")
+def hubspot_owners() -> dict[str, Any]:
+    """List HubSpot owners (id + email) for pasting into Team rep settings."""
+    if not hubspot_configured():
+        return {
+            "configured": False,
+            "owners": [],
+            "message": "Set HUBSPOT_ACCESS_TOKEN on Railway, or paste owner IDs manually on each rep.",
+        }
+    try:
+        owners = list_hubspot_owners()
+        return {"configured": True, "owners": owners}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
