@@ -60,16 +60,19 @@ def _lead_payload(row: pd.Series | dict[str, Any]) -> dict[str, Any]:
 
 
 def _rep_payload_for_n8n(rep: dict[str, Any]) -> dict[str, Any]:
-    """Rep block for n8n — hubspot_owner_id is numeric only when resolved (never empty string)."""
+    """Rep block for n8n — always includes hubspot_owner_id (number or null) for HubSpot nodes."""
     payload: dict[str, Any] = {
         "id": _safe_str(rep.get("id", "")),
         "name": _safe_str(rep.get("name", "")),
         "email": _safe_str(rep.get("email", "")),
         "bucket": _safe_str(rep.get("bucket", "")),
+        "hubspot_owner_id": None,
+        "has_hubspot_owner_id": False,
     }
     owner_id = hubspot_owner_id_for_rep(rep)
     if owner_id.isdigit():
         payload["hubspot_owner_id"] = int(owner_id)
+        payload["has_hubspot_owner_id"] = True
     payload["hubspot_owner_note"] = hubspot_owner_resolve_note(rep)
     return payload
 

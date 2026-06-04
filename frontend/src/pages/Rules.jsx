@@ -333,7 +333,7 @@ export default function Rules() {
           <em>Update HubSpot from this app</em> off). The webhook still sends contact data to n8n. Paste each
           rep&apos;s <strong>HubSpot owner ID</strong> on their card so n8n gets{" "}
           <code>body.rep.hubspot_owner_id</code>. In your HubSpot node: <strong>Contact Owner Name or ID</strong>{" "}
-          = <code>{`{{ Number($json.body.rep.hubspot_owner_id) }}`}</code>.
+          = <code>{`{{ $json.body.rep.hubspot_owner_id }}`}</code> (not <code>Number()</code> — avoids NaN when missing).
         </p>
       </Card>
 

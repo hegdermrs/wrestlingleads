@@ -94,7 +94,7 @@ def _owners_by_email() -> dict[str, str]:
 
 def hubspot_owner_resolve_note(rep: dict[str, Any]) -> str:
     """Human-readable reason owner id is present or missing (for n8n webhook debug)."""
-    manual = _safe_str(rep.get("hubspot_owner_id"))
+    manual = _normalize_owner_id(rep.get("hubspot_owner_id"))
     if manual:
         return f"Using HubSpot owner ID {manual} from Team settings."
     rep_email = _safe_str(rep.get("email")).lower()
@@ -119,12 +119,29 @@ def hubspot_owner_resolve_note(rep: dict[str, Any]) -> str:
         return f"HubSpot owners API failed: {exc}"
 
 
+def _normalize_owner_id(value: object) -> str:
+    """Digits-only HubSpot owner id (handles str/int from Team JSON)."""
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return ""
+    if isinstance(value, int):
+        return str(value) if value > 0 else ""
+    if isinstance(value, float) and value == int(value):
+        return str(int(value))
+    raw = _safe_str(value)
+    if raw.isdigit():
+        return raw
+    digits = "".join(c for c in raw if c.isdigit())
+    return digits
+
+
 def hubspot_owner_id_for_rep(rep: dict[str, Any]) -> str:
     """
     Contact owner on sync: explicit hubspot_owner_id on the rep, else match rep email
     to a HubSpot owner user (requires HUBSPOT_ACCESS_TOKEN on Railway).
     """
-    manual = _safe_str(rep.get("hubspot_owner_id"))
+    manual = _normalize_owner_id(rep.get("hubspot_owner_id"))
     if manual:
         return manual
     rep_email = _safe_str(rep.get("email")).lower()

@@ -331,8 +331,8 @@ export default function Settings() {
             <strong>Your HubSpot node in n8n</strong> updates the contact. This app only POSTs the webhook
             (Gmail + lead fields). On <strong>Team</strong>, paste each rep&apos;s <strong>HubSpot owner ID</strong>{" "}
             → Save, then in n8n <strong>Contact Owner Name or ID</strong> ={" "}
-            <code>{`{{ Number($json.body.rep.hubspot_owner_id) }}`}</code>. If empty, read{" "}
-            <code>body.rep.hubspot_owner_note</code> in the webhook execution.
+            <code>{`{{ $json.body.rep.hubspot_owner_id }}`}</code> (already a number — do not wrap in{" "}
+            <code>Number()</code>). If null, check <code>body.rep.hubspot_owner_note</code> or Team owner IDs.
           </p>
 
           <p className="field-hint" style={{ marginTop: "1rem" }}>

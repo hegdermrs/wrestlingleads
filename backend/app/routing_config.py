@@ -46,6 +46,33 @@ def _strip_legacy_routing_keys(config: dict[str, Any]) -> dict[str, Any]:
     return config
 
 
+def _default_rep_by_id() -> dict[str, dict[str, Any]]:
+    by_id: dict[str, dict[str, Any]] = {}
+    for rep in default_rules().get("reps", []):
+        if isinstance(rep, dict):
+            rid = _safe_str(rep.get("id"))
+            if rid:
+                by_id[rid] = rep
+    return by_id
+
+
+def _backfill_rep_hubspot_owner_ids(config: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    """Copy hubspot_owner_id from config/routing_rules.json when missing on a rep."""
+    defaults = _default_rep_by_id()
+    changed = False
+    for rep in config.get("reps", []):
+        if not isinstance(rep, dict):
+            continue
+        rid = _safe_str(rep.get("id"))
+        if not rid or _safe_str(rep.get("hubspot_owner_id")):
+            continue
+        fallback = _safe_str(defaults.get(rid, {}).get("hubspot_owner_id"))
+        if fallback:
+            rep["hubspot_owner_id"] = fallback
+            changed = True
+    return config, changed
+
+
 def load_routing_config() -> dict[str, Any]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if not ROUTING_CONFIG_PATH.exists():
@@ -56,7 +83,11 @@ def load_routing_config() -> dict[str, Any]:
                 json.dumps(default_rules(), indent=2), encoding="utf-8"
             )
     config = json.loads(ROUTING_CONFIG_PATH.read_text(encoding="utf-8"))
-    return _strip_legacy_routing_keys(config)
+    config = _strip_legacy_routing_keys(config)
+    config, changed = _backfill_rep_hubspot_owner_ids(config)
+    if changed:
+        ROUTING_CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    return config
 
 
 def save_routing_config(config: dict[str, Any]) -> dict[str, Any]:
