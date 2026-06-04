@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ..lead_form_fields import FORM_LABEL_TO_COLUMN, column_for_wufoo_title, normalize_wufoo_title
+from .wufoo_fields import merged_wufoo_field_map
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 WOOFOO_MAP_PATH = BASE_DIR / "config" / "wufoo_field_map.json"
@@ -31,8 +32,12 @@ def _field_key(field_id: object) -> str:
     raw = str(field_id).strip()
     if not raw:
         return ""
-    if raw.startswith("Field"):
-        return raw
+    lower = raw.lower()
+    if lower.startswith("field"):
+        suffix = raw[5:] if raw.startswith("Field") else raw[5:]
+        digits = "".join(c for c in suffix if c.isdigit())
+        if digits:
+            return f"Field{digits}"
     if raw.isdigit():
         return f"Field{raw}"
     return raw
@@ -41,6 +46,12 @@ def _field_key(field_id: object) -> str:
 def _normalize_fields_dict(raw: dict[str, Any]) -> dict[str, Any]:
     """Flatten Wufoo Fields array format to FieldN keys and field titles."""
     flat: dict[str, Any] = dict(raw)
+    for key, value in raw.items():
+        if value is None:
+            continue
+        fid = _field_key(key)
+        if fid.startswith("Field"):
+            flat[fid] = value
 
     fields = raw.get("Fields")
     if isinstance(fields, list):
@@ -73,13 +84,47 @@ def _apply_label_mappings(flat: dict[str, Any], row: dict[str, Any]) -> None:
         if value is None or not str(value).strip():
             continue
         col = column_for_wufoo_title(str(key)) or title_map.get(str(key).strip())
+        if not col:
+            continue
+        current = str(row.get(col, "")).strip()
+        if not current or (col == "Source" and current.lower() == "wufoo"):
+            row[col] = value
+
+
+def _apply_field_map(flat: dict[str, Any], row: dict[str, Any], field_map: dict[str, str]) -> None:
+    for wufoo_key, qualifier_col in field_map.items():
+        if wufoo_key.startswith("_") or not qualifier_col:
+            continue
+        value = flat.get(wufoo_key)
+        if value is None or not str(value).strip():
+            continue
+        current = str(row.get(qualifier_col, "")).strip()
+        if not current or (qualifier_col == "Source" and current.lower() == "wufoo"):
+            row[qualifier_col] = value
+
+
+def _apply_utm_flat_keys(flat: dict[str, Any], row: dict[str, Any]) -> None:
+    """Map utm_source-style POST keys (URL prefill) to UTM columns."""
+    aliases = {
+        "utmsource": "UTM Source",
+        "utmmedium": "UTM Medium",
+        "utmcampaign": "UTM Campaign",
+        "utmterm": "UTM Term",
+        "utmcontent": "UTM Content",
+    }
+    for key, value in flat.items():
+        if value is None or not str(value).strip():
+            continue
+        norm = str(key).lower().replace(" ", "").replace("_", "")
+        col = aliases.get(norm)
         if col and not str(row.get(col, "")).strip():
             row[col] = value
 
 
 def wufoo_payload_to_lead_row(payload: dict[str, Any]) -> dict[str, Any]:
     """Convert Wufoo webhook/API payload to a qualifier lead row."""
-    field_map = load_wufoo_map()
+    static_map = load_wufoo_map()
+    field_map = merged_wufoo_field_map(static_map)
     flat = _normalize_fields_dict(payload)
     row: dict[str, Any] = {
         "Source": "Wufoo",
@@ -90,22 +135,8 @@ def wufoo_payload_to_lead_row(payload: dict[str, Any]) -> dict[str, Any]:
     if entry_id:
         row["Record ID"] = str(entry_id)
 
-    for wufoo_key, qualifier_col in field_map.items():
-        if wufoo_key.startswith("_"):
-            continue
-        value = flat.get(wufoo_key)
-        if value is not None and str(value).strip():
-            row[qualifier_col] = value
-
-    # Also match by field title if user mapped titles instead of FieldN ids
-    for wufoo_key, qualifier_col in field_map.items():
-        if qualifier_col in row and row[qualifier_col]:
-            continue
-        for candidate in (wufoo_key, wufoo_key.replace("_", " ")):
-            value = flat.get(candidate)
-            if value is not None and str(value).strip():
-                row[qualifier_col] = value
-
+    _apply_field_map(flat, row, field_map)
+    _apply_utm_flat_keys(flat, row)
     _apply_label_mappings(flat, row)
 
     return row

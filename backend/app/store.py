@@ -424,6 +424,13 @@ class ScoredLeadsStore:
             scored.at[scored.index[0], "Source"] = row.get("Source", "Wufoo")
         if "Create Date" not in scored.columns or not _safe_str(scored.iloc[0].get("Create Date", "")):
             scored.at[scored.index[0], "Create Date"] = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
+        # Keep all Wufoo form columns on the scored row (email, routing, HubSpot/n8n).
+        for col, val in row.items():
+            if val is None or not str(val).strip():
+                continue
+            if col not in scored.columns:
+                scored[col] = ""
+            scored.at[scored.index[0], col] = val
 
         result = self.append_scored_row(scored.iloc[0])
         log_webhook_lead(

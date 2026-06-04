@@ -69,6 +69,9 @@ def startup() -> None:
     if not MODEL_PATH.exists() and DEFAULT_TRAINING_FILE.exists():
         train_model()
     store.load_on_startup()
+    from .integrations.wufoo_fields import ensure_wufoo_field_cache
+
+    ensure_wufoo_field_cache()
 
 
 @app.get("/health")

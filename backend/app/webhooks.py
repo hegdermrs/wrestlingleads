@@ -62,8 +62,14 @@ async def _score_wufoo_lead(row: dict[str, Any], use_llm: bool) -> None:
 def wufoo_webhook_status() -> dict[str, Any]:
     """Diagnostics for Wufoo integration (does not expose secrets)."""
     from .integrations.wufoo import WOOFOO_MAP_PATH, load_wufoo_map
+    from .integrations.wufoo_fields import (
+        CACHE_PATH,
+        load_cached_field_map,
+        wufoo_api_configured,
+    )
 
     field_map = load_wufoo_map()
+    cached = load_cached_field_map()
     secret = os.getenv("WUFOO_WEBHOOK_SECRET")
     return {
         "webhook_path": "/webhooks/wufoo",
@@ -71,10 +77,36 @@ def wufoo_webhook_status() -> dict[str, Any]:
         "field_map_loaded": bool(field_map),
         "field_map_path": str(WOOFOO_MAP_PATH),
         "mapped_field_count": len(field_map),
+        "api_field_cache_count": len(cached),
+        "api_field_cache_path": str(CACHE_PATH),
+        "wufoo_api_configured": wufoo_api_configured(),
         "cache_loaded": store.loaded,
         "cache_row_count": int(store._meta.get("row_count", 0)) if store.loaded else 0,
         "last_scored_at": store._meta.get("last_append") or store._meta.get("scored_at") if store.loaded else None,
     }
+
+
+@router.post("/wufoo/sync-fields")
+async def wufoo_sync_fields(request: Request) -> dict[str, Any]:
+    """Refresh FieldN → column map from Wufoo API (requires WUFOO_API_KEY on Railway)."""
+    from .integrations.wufoo_fields import sync_wufoo_field_cache, wufoo_api_configured
+
+    if not wufoo_api_configured():
+        raise HTTPException(
+            status_code=400,
+            detail="Set WUFOO_API_KEY, WUFOO_SUBDOMAIN, and WUFOO_FORM on the server.",
+        )
+    payload: dict[str, Any] = {}
+    if request.headers.get("content-type", "").startswith("application/json"):
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                payload = body
+        except Exception:
+            payload = {}
+    _verify_wufoo_secret(request, payload if payload else None)
+    field_map = sync_wufoo_field_cache()
+    return {"ok": True, "mapped_field_count": len(field_map)}
 
 
 @router.post("/wufoo")

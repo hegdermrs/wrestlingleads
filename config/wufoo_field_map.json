@@ -1,7 +1,8 @@
 {
   "form": "free-coaching-session-wrestlingtournamentscom",
   "form_hash": "m15e069710rzjnq",
-  "note": "Wufoo webhook sends FieldN keys matching API IDs below. Do not commit Wufoo API/POST keys to git.",
+  "subdomain_note": "Set WUFOO_SUBDOMAIN on Railway (your Wufoo account subdomain, e.g. wrestlingmindset).",
+  "note": "Wufoo webhooks send FieldN keys. UTM fields use Field IDs from API sync — not literal UTM Source keys.",
   "wufoo_to_qualifier_map": {
     "Field1": "First Name",
     "Field2": "Last Name",
@@ -17,12 +18,7 @@
     "Field340": "Relationship Status",
     "Field117": "Source",
     "Field445": "Investment Level",
-    "Field113": "Message",
-    "UTM Source": "UTM Source",
-    "UTM Medium": "UTM Medium",
-    "UTM Campaign": "UTM Campaign",
-    "UTM Term": "UTM Term",
-    "UTM Content": "UTM Content"
+    "Field113": "Message"
   },
   "wufoo_title_to_qualifier_map": {
     "Which best describes you...": "Job Title",

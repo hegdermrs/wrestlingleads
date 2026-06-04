@@ -329,9 +329,7 @@ def _build_assignment_html(
     name: str,
     row: pd.Series | dict[str, Any],
 ) -> str:
-    form_rows = "".join(
-        _html_row(label, val) for label, val in form_entries_for_row(row, include_empty=True)
-    )
+    form_rows = "".join(_html_row(label, val) for label, val in form_entries_for_row(row))
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -388,8 +386,8 @@ def build_assignment_email(
     rep_first = _safe_str(rep.get("name", "there")).split()[0] or "there"
 
     lines = [f"Hi {rep_first},", "", "NEW LEAD ASSIGNED", "", name, ""]
-    for label, val in form_entries_for_row(row, include_empty=True):
-        lines.append(f"{label}: {val or '—'}")
+    for label, val in form_entries_for_row(row):
+        lines.append(f"{label}: {val}")
     lines.extend(["", "— LeadsWrestling"])
     text = "\n".join(lines)
 
