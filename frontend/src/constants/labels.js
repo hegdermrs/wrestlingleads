@@ -16,24 +16,24 @@ export const TIER_CLASS = {
 
 export const BUCKET_INFO = {
   urgent: {
-    title: "Urgent — Gene",
+    title: "Top priority — Gene",
     color: "rep-urgent",
-    hint: "Red-hot leads ready to start (~2 per week)",
+    hint: "Parents ready to start soon — your hottest opportunities",
   },
   hot_warm: {
-    title: "Hot & warm — Jake",
+    title: "Strong leads — Jake",
     color: "rep-hot",
-    hint: "Strong leads worth fast outreach (~5 per week)",
+    hint: "Worth a quick call — not quite emergency level",
   },
   general: {
-    title: "Everyone else — Beau & Eric",
+    title: "General pool — Beau & Eric",
     color: "rep-general",
-    hint: "Shared pool; Eric gets West Coast first",
+    hint: "Everyone else; Eric gets West Coast states first when enabled",
   },
   automation: {
-    title: "Automation queue",
+    title: "Automation only",
     color: "rep-general",
-    hint: "Bottom 20% — HubSpot workflows, no rep email",
+    hint: "Lower-fit leads — workflows only, no rep notification",
   },
 };
 

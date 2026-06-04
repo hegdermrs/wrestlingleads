@@ -29,14 +29,14 @@ export default function TierFilter({ active, counts, incomingCounts, onChange, t
             onClick={() => onChange(f.key)}
           >
             {incoming > 0 && (
-              <span className="tier-incoming-badge" title="New from form (webhook)">
+              <span className="tier-incoming-badge" title="New from your form">
                 {incoming}
               </span>
             )}
             <span className="tier-pill-label">{f.label}</span>
             <span className="tier-pill-count">{count}</span>
             {f.key === "All" && avgScore != null && (
-              <span className="tier-pill-sub">avg {avgScore}</span>
+              <span className="tier-pill-sub">avg fit {avgScore}</span>
             )}
           </button>
         );

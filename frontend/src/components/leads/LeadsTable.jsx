@@ -18,10 +18,10 @@ export default function LeadsTable({ leads }) {
             <th>Name</th>
             <th>Email</th>
             <th>Phone</th>
-            <th className="num">Score</th>
-            <th>Tier</th>
-            <th>Rep</th>
-            <th>Action</th>
+            <th className="num">Fit</th>
+            <th>Priority</th>
+            <th>Assigned</th>
+            <th>Next step</th>
             <th>Date</th>
           </tr>
         </thead>
@@ -51,7 +51,7 @@ export default function LeadsTable({ leads }) {
                 {open && lead["AI Reasons"] && (
                   <tr className="leads-detail-row">
                     <td colSpan={8}>
-                      <span className="detail-label">Why this score:</span> {lead["AI Reasons"]}
+                      <span className="detail-label">Why this priority:</span> {lead["AI Reasons"]}
                     </td>
                   </tr>
                 )}
@@ -60,7 +60,7 @@ export default function LeadsTable({ leads }) {
           })}
         </tbody>
       </table>
-      <p className="table-hint">Click a row for scoring details</p>
+      <p className="table-hint">Click a row to see why we ranked them</p>
     </div>
   );
 }

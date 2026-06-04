@@ -3,7 +3,9 @@ import {
   fetchJson,
   fetchRoutingRules,
   fetchRoutingStats,
+  fetchScoringRubric,
   saveRoutingRules,
+  saveScoringRubric,
   sendRoute,
   sendUnrouted,
 } from "../api.js";
@@ -13,6 +15,7 @@ import Toast from "../components/ui/Toast.jsx";
 import LoadingSkeleton from "../components/ui/LoadingSkeleton.jsx";
 import Badge from "../components/ui/Badge.jsx";
 import { BUCKET_INFO } from "../constants/labels.js";
+import { REP_SCORING_FIELDS } from "../constants/repScoringFields.js";
 
 function repBucketClass(bucket) {
   return BUCKET_INFO[bucket]?.color || "rep-general";
@@ -41,14 +44,24 @@ export default function Rules() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [testEmail, setTestEmail] = useState("");
+  const [rubric, setRubric] = useState({ Hot: 68, Warm: 42, Cold: 18 });
+  const [coachingBoost, setCoachingBoost] = useState(8);
+  const [icpLlmMin, setIcpLlmMin] = useState(68);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [r, s] = await Promise.all([fetchRoutingRules(), fetchRoutingStats()]);
+      const [r, s, rubricData] = await Promise.all([
+        fetchRoutingRules(),
+        fetchRoutingStats(),
+        fetchScoringRubric().catch(() => null),
+      ]);
       setRules(r);
       setStats(s);
+      if (rubricData?.tiers) setRubric(rubricData.tiers);
+      if (rubricData?.coaching_score_boost != null) setCoachingBoost(rubricData.coaching_score_boost);
+      if (rubricData?.icp_llm_min != null) setIcpLlmMin(rubricData.icp_llm_min);
     } catch (err) {
       setError(err.message || "Could not load team settings");
     } finally {
@@ -87,8 +100,23 @@ export default function Rules() {
         })),
       };
       const saved = await saveRoutingRules(payload);
+      const rubricResult = await saveScoringRubric({
+        tiers: {
+          Hot: Number(rubric.Hot),
+          Warm: Number(rubric.Warm),
+          Cold: Number(rubric.Cold),
+        },
+        coaching_score_boost: Number(coachingBoost),
+        icp_llm_min: Number(icpLlmMin),
+      });
       setRules(saved);
-      setMessage("Team routing saved.");
+      if (rubricResult?.tiers) setRubric(rubricResult.tiers);
+      const relabeled = rubricResult?.leads_relabeled ?? 0;
+      setMessage(
+        relabeled > 0
+          ? `Saved — ${relabeled.toLocaleString()} leads updated with new priority labels.`
+          : "Saved."
+      );
       await refresh();
     } catch (err) {
       setError(err.message || "Save failed");
@@ -155,9 +183,9 @@ export default function Rules() {
     <>
       <div className="page-intro animate-fade-in">
         <div>
-          <h1 className="page-title">Team routing</h1>
+          <h1 className="page-title">Team</h1>
           <p className="page-subtitle">
-            When a new lead comes in, we score it and email the right rep automatically.
+            Set who gets new leads, how they&apos;re prioritized, and when reps get notified.
           </p>
         </div>
         <button type="button" className="btn" onClick={handleSave} disabled={saving}>
@@ -171,59 +199,42 @@ export default function Rules() {
       {!rules?.smtp_configured && (
         <Card className="banner-warn" delay={40}>
           <p>
-            <strong>Notifications aren't set up yet.</strong> Leads can still be assigned, but reps won't be
-            notified until you add <code>N8N_WEBHOOK_URL</code> or email settings on Railway (Setup tab).
+            <strong>Rep notifications aren&apos;t on yet.</strong> Leads can still be assigned in the inbox.
+            Turn on <strong>Email the assigned rep</strong> below once your admin finishes email setup on the Setup tab.
           </p>
         </Card>
       )}
 
-      <Card title="Automatic routing" subtitle="What happens when someone fills out your form" delay={60}>
-        {(rules?.routing_mode === "hybrid" || rules?.routing_mode === "percentile") && (
-          <div className="banner-warn" style={{ marginBottom: "1rem" }}>
-            <p>
-              {rules?.routing_mode === "hybrid" ? (
-                <>
-                  <strong>Hybrid mode</strong> — Urgent red-hot leads (Priority + ready soon + score ≥
-                  urgent min) go to <strong>Gene</strong> first. Everyone else is split by rank: top{" "}
-                  {rules?.distribution_gene_pct ?? 10}% Gene, next {rules?.distribution_jake_pct ?? 20}%
-                  Jake, middle {rules?.distribution_general_pct ?? 50}% Beau/Eric, bottom{" "}
-                  {rules?.distribution_automation_pct ?? 20}% automation.
-                </>
-              ) : (
-                <>
-                  <strong>Percentile mode</strong> — Gene gets the top{" "}
-                  {rules?.distribution_gene_pct ?? 10}% of scored leads in your inbox, Jake the next{" "}
-                  {rules?.distribution_jake_pct ?? 20}%, Beau &amp; Eric the middle{" "}
-                  {rules?.distribution_general_pct ?? 50}%, bottom{" "}
-                  {rules?.distribution_automation_pct ?? 20}% to automation (no rep email).
-                </>
-              )}{" "}
-              Needs at least {rules?.min_leads_for_percentile ?? 15} scored leads before percentiles
-              apply.
-            </p>
-          </div>
-        )}
+      <Card title="When a lead comes in" subtitle="Usually within about 30 seconds of the form" delay={60}>
+        <p className="field-hint" style={{ marginBottom: "1rem" }}>
+          Each person&apos;s card below controls their share of leads and priority labels. Top-priority leads
+          ready to start can go to Gene before the normal split.
+        </p>
         <Toggle
           checked={!!rules?.auto_route_enabled}
           onChange={(v) => setRules({ ...rules, auto_route_enabled: v })}
-          label="Route new leads automatically"
-          description="Runs right after each form submission (~30 seconds)"
+          label="Assign new leads automatically"
+          description="Picks the right rep as soon as the lead is scored"
         />
         <Toggle
           checked={!!rules?.send_email_on_route}
           onChange={(v) => setRules({ ...rules, send_email_on_route: v })}
-          label="Notify the assigned rep"
-          description="Triggers n8n webhook and/or email (Resend/SMTP) when configured"
+          label="Email the assigned rep"
+          description="Sends a notification when email or automation is set up in Setup"
         />
         <Toggle
           checked={rules?.sync_hubspot_on_route !== false}
           onChange={(v) => setRules({ ...rules, sync_hubspot_on_route: v })}
-          label="Sync HubSpot on route"
-          description="Create or update the HubSpot contact when HUBSPOT_ACCESS_TOKEN is set on Railway"
+          label="Update HubSpot when assigned"
+          description="Keeps the contact record in sync if HubSpot is connected"
         />
       </Card>
 
-      <Card title="Your sales team" subtitle="Edit role, name, description, email, and weekly limit — save when done" delay={100}>
+      <Card
+        title="Your team"
+        subtitle="Open each card to edit name, email, limits, and how leads are split — then Save changes"
+        delay={100}
+      >
         <div className="team-grid">
           {(rules?.reps || []).map((rep, index) => {
             const cap = parseWeeklyCap(rep.weekly_cap);
@@ -240,7 +251,7 @@ export default function Rules() {
                     </div>
                     <div className="team-card-fields">
                       <label className="field-label">
-                        Role label
+                        Role (shown on emails)
                         <input
                           className="input team-role-input"
                           value={rep.role_label ?? ""}
@@ -271,6 +282,63 @@ export default function Rules() {
                     />
                   </label>
 
+                  {(REP_SCORING_FIELDS[rep.bucket] || []).length > 0 && (
+                    <div className="team-scoring-block">
+                      <p className="team-scoring-title">Lead split & priorities</p>
+                      {(REP_SCORING_FIELDS[rep.bucket] || []).map((field) => {
+                        const editHere = !field.editOnRepId || field.editOnRepId === rep.id;
+                        if (!editHere) {
+                          return (
+                            <p key={field.rulesKey || field.rubricKey} className="field-hint team-scoring-readonly">
+                              {field.label} — edit on Beau&apos;s card
+                            </p>
+                          );
+                        }
+
+                        let value = "";
+                        let onChange = () => {};
+
+                        if (field.rulesKey) {
+                          value = rules?.[field.rulesKey] ?? "";
+                          onChange = (e) =>
+                            setRules((prev) => ({ ...prev, [field.rulesKey]: e.target.value }));
+                        } else if (field.rubricKey) {
+                          value = rubric[field.rubricKey] ?? "";
+                          onChange = (e) =>
+                            setRubric((prev) => ({ ...prev, [field.rubricKey]: e.target.value }));
+                        } else if (field.scoringKey === "coaching_score_boost") {
+                          value = coachingBoost;
+                          onChange = (e) => setCoachingBoost(e.target.value);
+                        } else if (field.scoringKey === "icp_llm_min") {
+                          value = icpLlmMin;
+                          onChange = (e) => setIcpLlmMin(e.target.value);
+                        }
+
+                        return (
+                          <label key={field.rulesKey || field.rubricKey || field.scoringKey} className="rubric-row">
+                            <span className="rubric-label">
+                              <strong>{field.label}</strong>
+                            </span>
+                            <div className="rubric-input-wrap">
+                              {field.prefix && <span className="rubric-prefix">{field.prefix}</span>}
+                              <input
+                                className="input rubric-input"
+                                type="number"
+                                min={field.min ?? 0}
+                                max={field.max ?? 100}
+                                step={field.step ?? 1}
+                                value={value}
+                                onChange={onChange}
+                              />
+                              {field.suffix && <span className="rubric-prefix">{field.suffix}</span>}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {rep.bucket !== "automation" && (
                   <label className="field-label">
                     Email
                     <input
@@ -281,7 +349,9 @@ export default function Rules() {
                       placeholder="rep@email.com"
                     />
                   </label>
+                  )}
 
+                  {rep.bucket !== "automation" && (
                   <label className="field-label">
                     Weekly limit
                     <input
@@ -296,6 +366,7 @@ export default function Rules() {
                       placeholder="No limit"
                     />
                   </label>
+                  )}
                 </div>
 
                 <div className="team-card-footer">
@@ -327,7 +398,7 @@ export default function Rules() {
         </div>
       </Card>
 
-      <Card title="West Coast states" subtitle="Leads from these states go to Eric first (then Beau)" delay={140}>
+      <Card title="West Coast states" subtitle="These states go to Eric first, then Beau" delay={140}>
         <input
           className="input wide"
           value={(rules?.west_coast_states || []).join(", ")}
@@ -336,10 +407,10 @@ export default function Rules() {
           }
           placeholder="CA, OR, WA, NV, AZ, HI, AK"
         />
-        <p className="field-hint">Uses the state field from your form. Leave blank states to Beau & Eric by balance.</p>
+        <p className="field-hint">Uses the state from your form. Other states follow the normal Beau &amp; Eric split.</p>
       </Card>
 
-      <Card title="Try it" subtitle="Test with a real lead from your inbox" delay={180}>
+      <Card title="Try it" subtitle="Pick a lead from your inbox by email" delay={180}>
         <div className="inline-form">
           <input
             className="input"
@@ -349,19 +420,19 @@ export default function Rules() {
             onChange={(e) => setTestEmail(e.target.value)}
           />
           <button type="button" className="btn secondary" onClick={() => handleTestRoute(false)} disabled={saving}>
-            Preview
+            See who would get it
           </button>
           <button type="button" className="btn" onClick={() => handleTestRoute(true)} disabled={saving}>
-            Send now
+            Assign &amp; notify now
           </button>
         </div>
         <button type="button" className="btn ghost" onClick={handleSendUnrouted} disabled={saving}>
-          Send all unrouted leads to the team
+          Assign everyone still waiting
         </button>
       </Card>
 
       {stats?.recent?.length > 0 && (
-        <Card title="Recent assignments" delay={220}>
+        <Card title="Recent assignments" subtitle="Newest first" delay={220}>
           <ul className="assignment-list">
             {stats.recent.map((row, i) => (
               <li key={`${row.at}-${i}`} className="assignment-row animate-fade-in" style={{ animationDelay: `${i * 40}ms` }}>

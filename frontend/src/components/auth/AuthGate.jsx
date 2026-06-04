@@ -74,7 +74,7 @@ export default function AuthGate({ children }) {
           <form onSubmit={handleSubmit}>
             <div className="brand-mark auth-brand">LW</div>
             <h1 className="auth-title">LeadsWrestling</h1>
-            <p className="auth-sub">Enter the app password to continue.</p>
+            <p className="auth-sub">Sign in with your team password.</p>
             <label className="field-label" htmlFor="app-password">
               Password
             </label>
@@ -109,7 +109,7 @@ export default function AuthGate({ children }) {
           <form onSubmit={handleChangePassword}>
             <div className="brand-mark auth-brand">LW</div>
             <h1 className="auth-title">Change password</h1>
-            <p className="auth-sub">Updates the password saved on the server for all devices.</p>
+            <p className="auth-sub">Choose a new password for everyone on your team.</p>
             <label className="field-label" htmlFor="current-password">
               Current password
             </label>

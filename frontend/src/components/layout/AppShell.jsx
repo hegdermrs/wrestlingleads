@@ -2,9 +2,9 @@ import { NavLink, Outlet } from "react-router-dom";
 import { signOut } from "../auth/AuthGate.jsx";
 
 const NAV = [
-  { to: "/", end: true, label: "Leads", desc: "Inbox & priorities" },
-  { to: "/team", label: "Team", desc: "Who gets what" },
-  { to: "/setup", label: "Setup", desc: "Form connection" },
+  { to: "/", end: true, label: "Leads", desc: "Who to call first" },
+  { to: "/team", label: "Team", desc: "Assign & notify reps" },
+  { to: "/setup", label: "Setup", desc: "Connect your form" },
 ];
 
 export default function AppShell() {
@@ -15,7 +15,7 @@ export default function AppShell() {
           <div className="brand-mark">LW</div>
           <div>
             <p className="brand-title">LeadsWrestling</p>
-            <p className="brand-sub">Lead prioritization</p>
+            <p className="brand-sub">Sort leads · assign your team</p>
           </div>
         </div>
         <nav className="sidebar-nav">

@@ -164,7 +164,7 @@ export default function Dashboard() {
 
           <p className="page-subtitle">
 
-            New form submissions appear automatically. Priority leads rise to the top.
+            New form submissions show up here. Call Priority leads first.
 
           </p>
 
@@ -182,7 +182,7 @@ export default function Dashboard() {
 
           <button type="button" className="btn" onClick={handleExport} disabled={!stats?.loaded}>
 
-            Download Excel
+            Export to Excel
 
           </button>
 
@@ -242,7 +242,7 @@ export default function Dashboard() {
 
       {recent.length > 0 && (
 
-        <Card title="Just came in" subtitle="Live form submissions only" delay={120}>
+        <Card title="Just came in" subtitle="From your website form" delay={120}>
 
           <div className="recent-table-wrap">
 
@@ -254,11 +254,11 @@ export default function Dashboard() {
 
                   <th>Name</th>
 
-                  <th className="num">Score</th>
+                  <th className="num">Fit</th>
 
-                  <th>Tier</th>
+                  <th>Priority</th>
 
-                  <th>Rep</th>
+                  <th>Assigned</th>
 
                 </tr>
 
