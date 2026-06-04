@@ -12,15 +12,24 @@ from .routing_config import load_routing_config, save_routing_config
 from .routing_log import recent_entries, weekly_stats
 from .n8n_notify import n8n_configured, notify_configured, verify_n8n_connection
 from .routing_notify import email_configured, email_transport, verify_email_connection
+from .integrations.hubspot import hubspot_configured, verify_hubspot_connection
 from .store import store
 
 router = APIRouter(prefix="/routing", tags=["routing"])
 
 
 class RoutingRulesUpdate(BaseModel):
+    routing_mode: str = "hybrid"
+    distribution_gene_pct: float = 10
+    distribution_jake_pct: float = 20
+    distribution_general_pct: float = 50
+    distribution_automation_pct: float = 20
+    min_leads_for_percentile: int = 15
+    automation_skip_notify: bool = True
     auto_route_enabled: bool = True
     send_email_on_route: bool = True
-    urgent_min_score: float = 80
+    sync_hubspot_on_route: bool = True
+    urgent_min_score: float = 75
     jake_min_warm_score: float = 70
     west_coast_states: list[str] = Field(default_factory=list)
     reps: list[dict[str, Any]]
@@ -50,6 +59,7 @@ def get_routing_rules() -> dict[str, Any]:
         "email_configured": email_configured(),
         "n8n_configured": n8n_configured(),
         "email_transport": email_transport(),
+        "hubspot_configured": hubspot_configured(),
     }
 
 
@@ -65,6 +75,7 @@ def update_routing_rules(body: RoutingRulesUpdate) -> dict[str, Any]:
         "email_configured": email_configured(),
         "n8n_configured": n8n_configured(),
         "email_transport": email_transport(),
+        "hubspot_configured": hubspot_configured(),
     }
 
 
@@ -140,3 +151,9 @@ def smtp_test() -> dict[str, Any]:
 def n8n_test() -> dict[str, Any]:
     """Send a test payload to the n8n webhook."""
     return verify_n8n_connection()
+
+
+@router.post("/hubspot-test")
+def hubspot_test() -> dict[str, Any]:
+    """Verify HubSpot private app token (owners API)."""
+    return verify_hubspot_connection()

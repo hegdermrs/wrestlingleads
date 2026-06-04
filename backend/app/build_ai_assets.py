@@ -166,6 +166,19 @@ def build_hubspot_config() -> dict:
             },
             "ml_score": {"label": "ML Score", "type": "number"},
             "llm_score": {"label": "LLM Score", "type": "number"},
+            "lw_assigned_rep": {
+                "label": "LW Assigned Rep",
+                "type": "string",
+                "description": "Sales rep from LeadsWrestling routing",
+            },
+            "lw_route_reason": {
+                "label": "LW Route Reason",
+                "type": "string",
+            },
+            "lw_assigned_at": {
+                "label": "LW Assigned At",
+                "type": "string",
+            },
         },
         "source_to_hubspot_field_map": {
             "AI Score": "ai_score",

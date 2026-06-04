@@ -30,6 +30,11 @@ export const BUCKET_INFO = {
     color: "rep-general",
     hint: "Shared pool; Eric gets West Coast first",
   },
+  automation: {
+    title: "Automation queue",
+    color: "rep-general",
+    hint: "Bottom 20% — HubSpot workflows, no rep email",
+  },
 };
 
 export function leadDisplayName(lead) {

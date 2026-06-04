@@ -17,9 +17,9 @@ HUBSPOT_10PT_WEIGHT = 0.10
 RULES_WEIGHT = 0.10
 
 TIER_THRESHOLDS = {
-    "Hot": 75,
-    "Warm": 50,
-    "Cold": 25,
+    "Hot": 68,
+    "Warm": 42,
+    "Cold": 18,
 }
 
 CATEGORICAL_COLUMNS = [

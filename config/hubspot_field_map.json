@@ -33,6 +33,21 @@
     "llm_score": {
       "label": "LLM Score",
       "type": "number"
+    },
+    "lw_assigned_rep": {
+      "label": "LW Assigned Rep",
+      "type": "string",
+      "description": "Sales rep name from LeadsWrestling routing"
+    },
+    "lw_route_reason": {
+      "label": "LW Route Reason",
+      "type": "string",
+      "description": "Why this rep received the lead"
+    },
+    "lw_assigned_at": {
+      "label": "LW Assigned At",
+      "type": "string",
+      "description": "UTC timestamp when LeadsWrestling assigned the lead"
     }
   },
   "source_to_hubspot_field_map": {

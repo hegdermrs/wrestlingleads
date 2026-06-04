@@ -1,7 +1,9 @@
 {
   "tiers": {
-    "Hot": 75,
-    "Warm": 50,
-    "Cold": 25
-  }
+    "Hot": 68,
+    "Warm": 42,
+    "Cold": 18
+  },
+  "coaching_score_boost": 8,
+  "icp_llm_min": 68
 }

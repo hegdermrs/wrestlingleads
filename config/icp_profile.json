@@ -1,0 +1,36 @@
+{
+  "summary": "Ideal lead: a parent (or motivated wrestler) seeking 1-on-1 mental performance coaching for a middle school or high school wrestler with real tournament ambition, near-term goals, and emotional readiness to start now. Strong fit shows mental struggle (confidence, choking, anxiety in big matches), specific wrestling context, and investment in high-performance coaching — not generic interest or book-only subscribers.",
+  "positive_signals": [
+    "Parent Seeking 1-1 Coaching for Child",
+    "Wrestler Seeking 1-1 Coaching for Myself",
+    "Struggling mentally",
+    "Ready to start now",
+    "Near-term deadline (this month, next month, Fargo, state, nationals)",
+    "High-Performance Coaching investment tier",
+    "Detailed message about confidence, choking, big matches, or mindset before competition",
+    "7+ years experience or serious competitive path (state, Fargo, etc.)"
+  ],
+  "negative_signals": [
+    "Email-only subscriber with no coaching form fields",
+    "Coach seeking team-only training without 1-on-1 fit",
+    "No wrestling context or vague curiosity only",
+    "HubSpot Unqualified with no coaching story"
+  ],
+  "reference_leads": [
+    {
+      "label": "Bo Baskett — ICP archetype",
+      "job_title": "Parent Seeking 1-1 Coaching for Child",
+      "job_function": "Struggling mentally",
+      "relationship_status": "Ready to start now",
+      "wrestler_goal": "Fargo champ",
+      "deadline": "next month",
+      "investment": "High-Performance Coaching (Recommended)",
+      "message": "We need to get Bo's mindset right before Fargo. He struggles with confidence and chokes in big matches. He has the talent but struggles against guys at or above his level. He needs to take the next step mentally before Fargo.",
+      "target_score": 92,
+      "reasons": [
+        "Perfect ICP: parent buyer, mental struggle, urgent timeline, high-performance intent",
+        "Score leads like this in the 88-95 range unless clear disqualifiers"
+      ]
+    }
+  ]
+}

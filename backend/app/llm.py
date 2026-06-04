@@ -18,28 +18,36 @@ from .config import (
     DEEPSEEK_RETRY_BASE_DELAY,
     FEW_SHOT_PATH,
 )
-from .features import build_text_bundle, empty_profile_text_result, heuristic_text_score
+from .features import _safe_str, build_text_bundle, empty_profile_text_result, heuristic_text_score
+from .icp_profile import format_icp_for_llm, icp_reference_few_shot, load_icp_profile
 
 ProgressCallback = Callable[[int, int], None] | None
 
-SYSTEM_PROMPT = """You are a lead qualification expert for a 1-on-1 mental performance coaching program for wrestlers.
+def _system_prompt() -> str:
+    icp_block = format_icp_for_llm()
+    return f"""You are a lead qualification expert for a 1-on-1 mental performance coaching program for wrestlers.
 
-Score each lead 0-100 based on:
-- Fit for 1-on-1 mental coaching (not team-only or wrong sport)
-- Specificity of pain points (nerves, choking, confidence, mindset)
-- Purchase intent and readiness
-- Athlete level appropriateness for middle school and high school wrestlers (core ICP)
+Score each lead 0-100 based on fit for the ICP below, specificity of pain points (nerves, choking, confidence, mindset),
+purchase intent, readiness, and athlete level (middle school / high school wrestlers).
+
+{icp_block}
 
 IMPORTANT: If the lead has no message, job title, goals, or other coaching context (email-only record),
 score 15-25 maximum. Do not infer intent from lifecycle stage alone.
 
+Leads that closely match the ICP reference examples (especially the labeled archetype) should score in the 85-95 range.
+Leads with clear 1-on-1 coaching intent but fewer details: 72-85. Reserve below 50 for weak fit or no coaching intent.
+
 Return ONLY valid JSON with this shape:
-{
+{{
   "score": <number 0-100>,
   "reasons": ["reason1", "reason2"],
   "red_flags": ["flag1"]
-}
+}}
 """
+
+
+SYSTEM_PROMPT = _system_prompt()
 
 
 def _load_few_shot_examples() -> list[dict]:
@@ -49,8 +57,18 @@ def _load_few_shot_examples() -> list[dict]:
 
 
 def _build_user_prompt(row: pd.Series, few_shot: list[dict]) -> str:
+    icp_examples = icp_reference_few_shot()
+    merged_shots: list[dict] = []
+    seen: set[str] = set()
+    for ex in icp_examples + few_shot:
+        key = (_safe_str(ex.get("message", ""))[:80], _safe_str(ex.get("name", "")))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged_shots.append(ex)
+
     examples_text = ""
-    for ex in few_shot[:5]:
+    for ex in merged_shots[:6]:
         examples_text += (
             f"\nExample good lead ({ex.get('lifecycle', 'Customer')}):\n"
             f"Buyer: {ex.get('job_title', '')}\n"
@@ -136,7 +154,7 @@ async def _call_deepseek_with_retry(client: Any, model: str, prompt: str) -> dic
             response = await client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": _system_prompt()},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.2,
@@ -248,7 +266,7 @@ def score_lead_with_llm(row: pd.Series, client: Any | None = None) -> dict[str, 
         response = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": _system_prompt()},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.2,

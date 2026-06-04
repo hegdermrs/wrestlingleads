@@ -350,14 +350,30 @@ export function testN8nWebhook() {
   return fetchJson("/routing/n8n-test", { method: "POST" });
 }
 
+export function testHubspotConnection() {
+  return fetchJson("/routing/hubspot-test", { method: "POST" });
+}
+
 export function fetchScoringRubric() {
   return fetchJson("/scoring/rubric");
 }
 
-export function saveScoringRubric(tiers) {
+export function fetchIcpProfile() {
+  return fetchJson("/scoring/icp-profile");
+}
+
+export function saveIcpProfile(profile) {
+  return fetchJson("/scoring/icp-profile", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(profile),
+  });
+}
+
+export function saveScoringRubric({ tiers, coaching_score_boost = 8, icp_llm_min = 68 }) {
   return fetchJson("/scoring/rubric", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tiers }),
+    body: JSON.stringify({ tiers, coaching_score_boost, icp_llm_min }),
   });
 }

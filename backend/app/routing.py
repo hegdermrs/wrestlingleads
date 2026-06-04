@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
+import numpy as np
 import pandas as pd
 
 from .features import URGENT_DEADLINE_KEYWORDS, _safe_str, has_coaching_signals, is_sparse_subscriber
 from .routing_config import load_routing_config, reps_for_bucket
+from .scoring_config import get_tier_thresholds
 from .routing_log import append_routing_entry, count_rep_this_week, was_lead_routed
 from .routing_notify import send_lead_assignment_email, email_configured
+from .integrations.hubspot import hubspot_configured, sync_contact_on_route
 from .n8n_notify import n8n_configured, send_n8n_assignment_notification
 
 WEST_COAST_NAME_HINTS = (
@@ -68,11 +71,13 @@ def is_west_coast(row: pd.Series | dict[str, Any], config: dict[str, Any]) -> bo
 
 
 def is_urgent_red_hot(row: pd.Series | dict[str, Any], config: dict[str, Any]) -> bool:
+    """Gene bucket: Priority (Hot) tier, at/above urgent floor, and ready soon."""
     tier = _tier(row)
     score = _score(row)
     if tier != "Hot":
         return False
-    min_score = float(config.get("urgent_min_score", 80))
+    hot_floor = float(get_tier_thresholds()["Hot"])
+    min_score = float(config.get("urgent_min_score", hot_floor))
     return score >= min_score and _is_ready_now(row)
 
 
@@ -110,6 +115,67 @@ def _rep_under_cap(rep: dict[str, Any]) -> bool:
     return count_rep_this_week(_safe_str(rep.get("id"))) < cap_n
 
 
+def _distribution_pcts(config: dict[str, Any]) -> tuple[float, float, float, float]:
+    """Gene top %, Jake next %, general next %, automation bottom % (must sum ~100)."""
+    gene = float(config.get("distribution_gene_pct", 10))
+    jake = float(config.get("distribution_jake_pct", 20))
+    general = float(config.get("distribution_general_pct", 50))
+    automation = float(config.get("distribution_automation_pct", 20))
+    total = gene + jake + general + automation
+    if total <= 0:
+        return 10.0, 20.0, 50.0, 20.0
+    scale = 100.0 / total
+    return gene * scale, jake * scale, general * scale, automation * scale
+
+
+def _routable_scores_from_store() -> list[float]:
+    from .store import store
+
+    if not store.loaded:
+        return []
+    scores: list[float] = []
+    try:
+        row_count = len(store._df)  # type: ignore[arg-type]
+    except Exception:
+        return []
+    for i in range(row_count):
+        row = store.get_row_at(i)
+        ok, _ = should_route_lead(row)
+        if ok:
+            scores.append(_score(row))
+    return scores
+
+
+def _percentile_band(score: float, config: dict[str, Any]) -> Literal["gene", "jake", "general", "automation"]:
+    scores = _routable_scores_from_store()
+    min_leads = int(config.get("min_leads_for_percentile", 15))
+    if len(scores) < min_leads:
+        return "general"
+
+    gene_pct, jake_pct, general_pct, automation_pct = _distribution_pcts(config)
+    # Cumulative cutoffs from the bottom (automation = lowest scores).
+    p_auto = float(np.percentile(scores, automation_pct))
+    p_general = float(np.percentile(scores, automation_pct + general_pct))
+    p_jake = float(np.percentile(scores, automation_pct + general_pct + jake_pct))
+
+    if score < p_auto:
+        return "automation"
+    if score < p_general:
+        return "general"
+    if score < p_jake:
+        return "jake"
+    return "gene"
+
+
+def _first_rep_with_cap(
+    reps: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    for rep in reps:
+        if _rep_under_cap(rep):
+            return rep
+    return None
+
+
 def _pick_general_rep(row: pd.Series | dict[str, Any], config: dict[str, Any]) -> tuple[dict[str, Any], str]:
     general = reps_for_bucket(config, "general")
     if not general:
@@ -133,23 +199,115 @@ def _pick_general_rep(row: pd.Series | dict[str, Any], config: dict[str, Any]) -
     return chosen, "General pool — balanced weekly volume"
 
 
-def assign_rep(
+def _assign_rep_percentile(
     row: pd.Series | dict[str, Any],
-    config: dict[str, Any] | None = None,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    """Route by score rank vs other routable leads in the inbox (10/20/50/20 style split)."""
+    score = _score(row)
+    band = _percentile_band(score, config)
+    gene_pct, jake_pct, general_pct, automation_pct = _distribution_pcts(config)
+
+    bucket_key = {
+        "gene": "urgent",
+        "jake": "hot_warm",
+        "general": "general",
+        "automation": "automation",
+    }
+
+    fallthrough: list[tuple[str, str, str]] = []
+    if band == "gene":
+        fallthrough = [
+            ("gene", "urgent", f"Top {gene_pct:.0f}% of scored leads"),
+            ("jake", "hot_warm", f"Top {gene_pct:.0f}% band — Gene at weekly cap, sent to Jake"),
+            ("general", "general", "Top band — Gene and Jake at cap"),
+        ]
+    elif band == "jake":
+        fallthrough = [
+            ("jake", "hot_warm", f"Next {jake_pct:.0f}% of scored leads (after top {gene_pct:.0f}%)"),
+            ("general", "general", "Jake at weekly cap — general pool"),
+        ]
+    elif band == "general":
+        fallthrough = [
+            ("general", "general", f"Middle {general_pct:.0f}% of scored leads"),
+        ]
+    else:
+        fallthrough = [
+            ("automation", "automation", f"Bottom {automation_pct:.0f}% — automation / nurture"),
+        ]
+
+    for rep_key, route_bucket, reason in fallthrough:
+        if rep_key == "general":
+            rep, reason = _pick_general_rep(row, config)
+            return {
+                "assigned": True,
+                "rep": rep,
+                "route_bucket": route_bucket,
+                "route_reason": reason,
+                "distribution_band": band,
+            }
+        reps = reps_for_bucket(config, bucket_key[rep_key])
+        rep = _first_rep_with_cap(reps)
+        if rep:
+            return {
+                "assigned": True,
+                "rep": rep,
+                "route_bucket": route_bucket,
+                "route_reason": reason,
+                "distribution_band": band,
+            }
+
+    if band != "automation":
+        rep, reason = _pick_general_rep(row, config)
+        return {
+            "assigned": True,
+            "rep": rep,
+            "route_bucket": "general",
+            "route_reason": reason,
+            "distribution_band": band,
+        }
+
+    auto_reps = reps_for_bucket(config, "automation")
+    if auto_reps:
+        return {
+            "assigned": True,
+            "rep": auto_reps[0],
+            "route_bucket": "automation",
+            "route_reason": fallthrough[0][2],
+            "distribution_band": band,
+        }
+
+    return {
+        "assigned": False,
+        "skipped_reason": "Automation queue not configured (add a rep with bucket automation)",
+        "distribution_band": band,
+    }
+
+
+def _assign_rep_hybrid(
+    row: pd.Series | dict[str, Any],
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    """Urgent red-hot → Gene first; everyone else by inbox score percentiles."""
+    if is_urgent_red_hot(row, config):
+        for rep in reps_for_bucket(config, "urgent"):
+            if _rep_under_cap(rep):
+                return {
+                    "assigned": True,
+                    "rep": rep,
+                    "route_bucket": "urgent",
+                    "route_reason": "Urgent red-hot — Priority tier, ready soon, meets urgent score",
+                    "distribution_band": "urgent",
+                }
+    return _assign_rep_percentile(row, config)
+
+
+def _assign_rep_tier(
+    row: pd.Series | dict[str, Any],
+    config: dict[str, Any],
     *,
     ignore_prior: bool = False,
 ) -> dict[str, Any]:
-    """Pick rep and bucket for a lead without sending email."""
-    config = config or load_routing_config()
-    ok, skip = should_route_lead(row)
-    if not ok:
-        return {"assigned": False, "skipped_reason": skip}
-
-    get = row.get if isinstance(row, dict) else row.get
-    email = _safe_str(get("Email", ""))
-    if email and not ignore_prior and was_lead_routed(email):
-        return {"assigned": False, "skipped_reason": "Lead already routed this cycle"}
-
     if is_urgent_red_hot(row, config):
         for rep in reps_for_bucket(config, "urgent"):
             if _rep_under_cap(rep):
@@ -181,6 +339,31 @@ def assign_rep(
     }
 
 
+def assign_rep(
+    row: pd.Series | dict[str, Any],
+    config: dict[str, Any] | None = None,
+    *,
+    ignore_prior: bool = False,
+) -> dict[str, Any]:
+    """Pick rep and bucket for a lead without sending email."""
+    config = config or load_routing_config()
+    ok, skip = should_route_lead(row)
+    if not ok:
+        return {"assigned": False, "skipped_reason": skip}
+
+    get = row.get if isinstance(row, dict) else row.get
+    email = _safe_str(get("Email", ""))
+    if email and not ignore_prior and was_lead_routed(email):
+        return {"assigned": False, "skipped_reason": "Lead already routed this cycle"}
+
+    mode = _safe_str(config.get("routing_mode", "hybrid")).lower()
+    if mode == "hybrid":
+        return _assign_rep_hybrid(row, config)
+    if mode == "percentile":
+        return _assign_rep_percentile(row, config)
+    return _assign_rep_tier(row, config, ignore_prior=ignore_prior)
+
+
 def route_and_notify(
     row: pd.Series | dict[str, Any],
     config: dict[str, Any] | None = None,
@@ -198,10 +381,24 @@ def route_and_notify(
     lead_email = _safe_str(get("Email", ""))
     email_sent = False
     n8n_sent = False
+    hubspot_synced = False
     notify_error: str | None = None
     n8n_error: str | None = None
+    hubspot_error: str | None = None
+    hubspot_result: dict[str, Any] | None = None
 
-    if config.get("send_email_on_route", True):
+    if config.get("sync_hubspot_on_route", True) and hubspot_configured():
+        try:
+            hubspot_result = sync_contact_on_route(row, rep, assignment)
+            hubspot_synced = True
+        except Exception as exc:
+            hubspot_error = str(exc)
+
+    skip_notify = assignment.get("route_bucket") == "automation" and config.get(
+        "automation_skip_notify", True
+    )
+
+    if config.get("send_email_on_route", True) and not skip_notify:
         if n8n_configured():
             try:
                 n8n_sent = send_n8n_assignment_notification(row, rep, assignment)
@@ -232,6 +429,9 @@ def route_and_notify(
         **assignment,
         "email_sent": email_sent,
         "n8n_sent": n8n_sent,
+        "hubspot_synced": hubspot_synced,
+        "hubspot_result": hubspot_result,
+        "hubspot_error": hubspot_error,
         "notify_error": notify_error,
         "n8n_error": n8n_error,
     }

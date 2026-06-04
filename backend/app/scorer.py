@@ -21,7 +21,7 @@ from .features import (
     qualifies_icp_priority_floor,
 )
 from .reference_scores import apply_reference_stability
-from .scoring_config import get_tier_thresholds
+from .scoring_config import get_coaching_score_boost, get_tier_thresholds
 from .llm import score_leads_with_llm_async
 from .progress import ProgressCallback, emit_progress
 from .train import load_model, predict_ml_scores
@@ -52,7 +52,7 @@ def recommended_action(tier: str, lifecycle: str) -> str:
 
 def compute_rule_adjustments(row: pd.Series) -> tuple[float, list[str], list[str]]:
     """Return rule score (0-100 scale contribution), reasons, and flags."""
-    score = 50.0
+    score = 55.0
     reasons: list[str] = []
     flags: list[str] = []
 
@@ -61,16 +61,29 @@ def compute_rule_adjustments(row: pd.Series) -> tuple[float, list[str], list[str
         return 100.0, ["Already a customer"], []
 
     relationship = _safe_str(row.get("Relationship Status", ""))
-    if relationship == "Ready to start now":
-        score += 15
+    if relationship == "Ready to start now" or "ready to start" in relationship.lower():
+        score += 18
         reasons.append("Ready to start now")
 
     deadline = _safe_str(row.get("Deadline for Goal", "")).lower()
-    if any(k in deadline for k in ("now", "asap", "this week", "next week")):
-        score += 10
+    if any(k in deadline for k in ("now", "asap", "this week", "next week", "next month")):
+        score += 12
         reasons.append("Near-term deadline")
 
     job_title = _safe_str(row.get("Job Title", ""))
+    if any(t in job_title for t in ("Parent Seeking 1-1", "Wrestler Seeking 1-1")):
+        score += 10
+        reasons.append("Core 1-on-1 coaching buyer")
+    job_function = _safe_str(row.get("Job function", ""))
+    if "Struggling mentally" in job_function or "Mental Edge" in job_function:
+        score += 10
+        reasons.append("Mental performance focus")
+
+    investment = _safe_str(row.get("Investment Level", "")).lower()
+    if "high-performance" in investment or "recommended" in investment:
+        score += 8
+        reasons.append("High-performance investment tier")
+
     if "Coach Seeking Team Mindset Training" in job_title:
         flags.append("Coach/team track — verify product fit")
         score -= 5
@@ -208,7 +221,14 @@ async def score_dataframe_async(
                 hubspot_score=hubspot_val,
                 rule_score=rule_score,
             )
+            boost = get_coaching_score_boost()
+            if boost > 0 and has_coaching_signals(row):
+                final += boost
             final = max(0.0, min(100.0, final))
+
+            boost_note: str | None = None
+            if boost > 0 and has_coaching_signals(row):
+                boost_note = f"Coaching intent boost +{boost:.0f}"
 
             cap_reason: str | None = None
             final, stability_reason = apply_reference_stability(final, row)
@@ -229,6 +249,8 @@ async def score_dataframe_async(
                 reason_parts.append(f"HubSpot 10pt: {hubspot_val:.0f}/100")
             reason_parts.extend(llm.get("reasons", [])[:2])
             reason_parts.extend(rule_reasons[:2])
+            if boost_note:
+                reason_parts.append(boost_note)
             if cap_reason:
                 reason_parts.append(cap_reason)
             flags = llm.get("red_flags", []) + rule_flags

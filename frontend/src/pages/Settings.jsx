@@ -11,8 +11,11 @@ import {
   downloadTierReport,
   fetchCompareSummary,
   fetchJson,
+  fetchIcpProfile,
   fetchScoringRubric,
+  saveIcpProfile,
   saveScoringRubric,
+  testHubspotConnection,
   testN8nWebhook,
   testSmtpConnection,
   uploadBaseline,
@@ -42,10 +45,15 @@ export default function Settings() {
   const [scoreProgress, setScoreProgress] = useState(null);
   const [compareSummary, setCompareSummary] = useState(null);
   const [wufooStatus, setWufooStatus] = useState(null);
-  const [rubric, setRubric] = useState({ Hot: 75, Warm: 50, Cold: 25 });
+  const [rubric, setRubric] = useState({ Hot: 68, Warm: 42, Cold: 18 });
+  const [coachingBoost, setCoachingBoost] = useState(8);
+  const [icpLlmMin, setIcpLlmMin] = useState(68);
+  const [icpSummary, setIcpSummary] = useState("");
+  const [icpSaving, setIcpSaving] = useState(false);
   const [rubricSaving, setRubricSaving] = useState(false);
   const [smtpTesting, setSmtpTesting] = useState(false);
   const [n8nTesting, setN8nTesting] = useState(false);
+  const [hubspotTesting, setHubspotTesting] = useState(false);
 
   useEffect(() => {
     checkHealth().then(setHealth);
@@ -54,6 +62,13 @@ export default function Settings() {
     fetchScoringRubric()
       .then((data) => {
         if (data?.tiers) setRubric(data.tiers);
+        if (data?.coaching_score_boost != null) setCoachingBoost(data.coaching_score_boost);
+        if (data?.icp_llm_min != null) setIcpLlmMin(data.icp_llm_min);
+      })
+      .catch(() => null);
+    fetchIcpProfile()
+      .then((data) => {
+        if (data?.summary) setIcpSummary(data.summary);
       })
       .catch(() => null);
   }, []);
@@ -100,15 +115,39 @@ export default function Settings() {
     setMessage("Link copied!");
   };
 
+  const handleSaveIcp = async () => {
+    setIcpSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const current = await fetchIcpProfile().catch(() => ({}));
+      await saveIcpProfile({
+        summary: icpSummary.trim(),
+        positive_signals: current.positive_signals || [],
+        negative_signals: current.negative_signals || [],
+        reference_leads: current.reference_leads || [],
+      });
+      setMessage("ICP profile saved — new scores will use this definition.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIcpSaving(false);
+    }
+  };
+
   const handleSaveRubric = async () => {
     setRubricSaving(true);
     setError("");
     setMessage("");
     try {
       const result = await saveScoringRubric({
-        Hot: Number(rubric.Hot),
-        Warm: Number(rubric.Warm),
-        Cold: Number(rubric.Cold),
+        tiers: {
+          Hot: Number(rubric.Hot),
+          Warm: Number(rubric.Warm),
+          Cold: Number(rubric.Cold),
+        },
+        coaching_score_boost: Number(coachingBoost),
+        icp_llm_min: Number(icpLlmMin),
       });
       if (result?.tiers) setRubric(result.tiers);
       const relabeled = result?.leads_relabeled ?? 0;
@@ -163,6 +202,24 @@ export default function Settings() {
     }
   };
 
+  const handleHubspotTest = async () => {
+    setHubspotTesting(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await testHubspotConnection();
+      if (result.ok) {
+        setMessage(result.note || "HubSpot token is valid.");
+      } else {
+        setError(result.error || "HubSpot test failed.");
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setHubspotTesting(false);
+    }
+  };
+
   const formConnected = wufooStatus?.secret_configured;
   const hasLeads = (wufooStatus?.cache_row_count ?? 0) > 0;
 
@@ -184,13 +241,45 @@ export default function Settings() {
       <Toast type="error" message={error} />
 
       <Card
+        title="Ideal customer (ICP)"
+        subtitle="Teaches the AI what a perfect lead looks like — Bo Baskett is the built-in archetype"
+        delay={18}
+      >
+        <p className="card-copy">
+          This text is sent to DeepSeek on every score. Leads similar to your reference example (parent, mental
+          struggle, Fargo-level goal, ready now) should score much higher. Edit the summary; reference leads live
+          in <code>config/icp_profile.json</code> on the server.
+        </p>
+        <label className="field-label" htmlFor="icp-summary">
+          ICP summary
+        </label>
+        <textarea
+          id="icp-summary"
+          className="input"
+          rows={5}
+          value={icpSummary}
+          onChange={(e) => setIcpSummary(e.target.value)}
+          placeholder="Describe your ideal wrestling coaching lead…"
+        />
+        <button
+          type="button"
+          className="btn secondary"
+          style={{ marginTop: "0.75rem" }}
+          onClick={handleSaveIcp}
+          disabled={icpSaving || !icpSummary.trim()}
+        >
+          {icpSaving ? "Saving…" : "Save ICP profile"}
+        </button>
+      </Card>
+
+      <Card
         title="Scoring rubric"
         subtitle="Minimum score for each tier — saved for all new and existing leads"
         delay={20}
       >
         <p className="card-copy">
-          Leads are scored 0–100. Set the cutoffs below. Priority must be highest, then Good fit, then Low
-          priority.
+          Leads are scored 0–100. Lower cutoffs = more Priority / Good fit labels. Coaching boost adds points
+          for real form fills (Wufoo / 1-on-1 intent) after ML + text blend.
         </p>
         <div className="rubric-grid">
           {RUBRIC_ROWS.map((row) => (
@@ -215,6 +304,42 @@ export default function Settings() {
               </div>
             </label>
           ))}
+          <label className="rubric-row">
+            <span className="rubric-label">
+              <strong>Coaching boost</strong>
+              <span className="muted">Added to leads with real coaching form data (0–20)</span>
+            </span>
+            <div className="rubric-input-wrap">
+              <span className="rubric-prefix">+</span>
+              <input
+                className="input rubric-input"
+                type="number"
+                min={0}
+                max={20}
+                step={1}
+                value={coachingBoost}
+                onChange={(e) => setCoachingBoost(e.target.value)}
+              />
+            </div>
+          </label>
+          <label className="rubric-row">
+            <span className="rubric-label">
+              <strong>ICP text minimum</strong>
+              <span className="muted">Text score needed to floor strong 1-on-1 leads to Priority</span>
+            </span>
+            <div className="rubric-input-wrap">
+              <span className="rubric-prefix">≥</span>
+              <input
+                className="input rubric-input"
+                type="number"
+                min={40}
+                max={95}
+                step={1}
+                value={icpLlmMin}
+                onChange={(e) => setIcpLlmMin(e.target.value)}
+              />
+            </div>
+          </label>
           <div className="rubric-row rubric-static">
             <span className="rubric-label">
               <strong>{TIER_LABELS.Unqualified.short}</strong>
@@ -263,6 +388,45 @@ export default function Settings() {
         </p>
         <button type="button" className="btn secondary" onClick={handleN8nTest} disabled={n8nTesting}>
           {n8nTesting ? "Sending test…" : "Test n8n webhook"}
+        </button>
+      </Card>
+
+      <Card
+        title="HubSpot CRM sync"
+        subtitle="Create or update a contact when a lead is assigned to a rep"
+        delay={28}
+      >
+        <div className={`status-tile ${health?.hubspot_configured ? "ok" : "warn"}`} style={{ marginBottom: "1rem" }}>
+          <span>HubSpot token on server</span>
+          <strong>{health?.hubspot_configured ? "Configured" : "Not set yet"}</strong>
+        </div>
+        <ol className="email-checklist">
+          <li>
+            HubSpot → Settings → Integrations → <strong>Private Apps</strong> → create app with scopes{" "}
+            <code>crm.objects.contacts.read</code> and <code>crm.objects.contacts.write</code>
+          </li>
+          <li>
+            Create contact properties from <code>config/hubspot_field_map.json</code> (at minimum{" "}
+            <code>lw_assigned_rep</code>, <code>lw_route_reason</code>, <code>lw_assigned_at</code>, plus AI fields
+            you want synced)
+          </li>
+          <li>
+            Railway variable <code>HUBSPOT_ACCESS_TOKEN</code> → redeploy
+          </li>
+          <li>
+            Optional: add <code>hubspot_owner_id</code> on each rep in Team routing JSON so HubSpot assigns the
+            contact owner
+          </li>
+          <li>
+            Keep <strong>Sync HubSpot on route</strong> enabled in Team rules (default on)
+          </li>
+        </ol>
+        <p className="field-hint">
+          Upsert order: HubSpot <strong>Record ID</strong> on the lead (if present) → search by email → create new
+          contact. Routing still completes if HubSpot fails; check API response <code>hubspot_error</code>.
+        </p>
+        <button type="button" className="btn secondary" onClick={handleHubspotTest} disabled={hubspotTesting}>
+          {hubspotTesting ? "Testing…" : "Test HubSpot connection"}
         </button>
       </Card>
 

@@ -23,9 +23,16 @@ def default_rules() -> dict[str, Any]:
     if DEFAULT_RULES_PATH.exists():
         return json.loads(DEFAULT_RULES_PATH.read_text(encoding="utf-8"))
     return {
+        "routing_mode": "hybrid",
+        "distribution_gene_pct": 10,
+        "distribution_jake_pct": 20,
+        "distribution_general_pct": 50,
+        "distribution_automation_pct": 20,
+        "min_leads_for_percentile": 15,
+        "automation_skip_notify": True,
         "auto_route_enabled": True,
         "send_email_on_route": True,
-        "urgent_min_score": 80,
+        "urgent_min_score": 75,
         "jake_min_warm_score": 70,
         "west_coast_states": ["CA", "OR", "WA", "NV", "AZ", "HI", "AK"],
         "reps": [],
@@ -48,6 +55,8 @@ def save_routing_config(config: dict[str, Any]) -> dict[str, Any]:
     if "reps" not in config or not isinstance(config["reps"], list):
         raise ValueError("Config must include a reps array.")
     for rep in config["reps"]:
+        if _safe_str(rep.get("bucket")) == "automation":
+            continue
         if not _safe_str(rep.get("email")):
             raise ValueError(f"Rep {rep.get('name', '?')} must have an email.")
         if not _safe_str(rep.get("id")):

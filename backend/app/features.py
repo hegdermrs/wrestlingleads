@@ -15,10 +15,17 @@ from sklearn.preprocessing import OneHotEncoder
 
 from .config import CATEGORICAL_COLUMNS
 
-URGENT_DEADLINE_KEYWORDS = ("now", "asap", "immediately", "this week", "next week", "urgent")
+URGENT_DEADLINE_KEYWORDS = (
+    "now",
+    "asap",
+    "immediately",
+    "this week",
+    "next week",
+    "next month",
+    "urgent",
+)
 COACHING_SOURCE_MARKERS = ("wufoo", "1-1")
 INCOMPLETE_PROFILE_MAX_SCORE = 35.0
-ICP_PRIORITY_MIN_LLM = 85.0
 
 CORE_ICP_JOB_TITLES = (
     "Parent Seeking 1-1 Coaching for Child",
@@ -144,7 +151,9 @@ def is_core_icp_buyer(row: pd.Series | dict) -> bool:
 
 def qualifies_icp_priority_floor(row: pd.Series | dict, llm_score: float) -> bool:
     """High-intent 1-on-1 coaching lead — ML should not demote below Priority."""
-    if llm_score < ICP_PRIORITY_MIN_LLM:
+    from .scoring_config import get_icp_llm_min
+
+    if llm_score < get_icp_llm_min():
         return False
     if is_sparse_subscriber(row):
         return False
@@ -200,7 +209,7 @@ def heuristic_text_score(row: pd.Series) -> tuple[float, list[str], list[str]]:
         return result["score"], result["reasons"], result["red_flags"]
 
     text = build_text_bundle(row).lower()
-    score = 35.0
+    score = 42.0
     reasons: list[str] = []
     red_flags: list[str] = []
 

@@ -27,6 +27,7 @@ from .webhooks import router as webhooks_router
 from .routing_api import router as routing_router
 from .routing_notify import email_configured, email_transport, resend_sandbox_enabled
 from .n8n_notify import n8n_configured, notify_configured
+from .integrations.hubspot import hubspot_configured
 from .scoring_api import router as scoring_router
 
 load_dotenv()
@@ -84,6 +85,7 @@ def health() -> dict:
         "smtp_configured": notify_configured(),
         "email_configured": email_configured(),
         "n8n_configured": n8n_configured(),
+        "hubspot_configured": hubspot_configured(),
         "email_transport": email_transport(),
         "resend_sandbox": resend_sandbox_enabled(),
         "smtp_user": os.getenv("SMTP_USER", "").strip() or None,

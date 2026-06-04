@@ -1,7 +1,15 @@
 {
+  "routing_mode": "hybrid",
+  "distribution_gene_pct": 10,
+  "distribution_jake_pct": 20,
+  "distribution_general_pct": 50,
+  "distribution_automation_pct": 20,
+  "min_leads_for_percentile": 15,
+  "automation_skip_notify": true,
   "auto_route_enabled": true,
   "send_email_on_route": true,
-  "urgent_min_score": 80,
+  "sync_hubspot_on_route": false,
+  "urgent_min_score": 75,
   "jake_min_warm_score": 70,
   "west_coast_states": ["CA", "OR", "WA", "NV", "AZ", "HI", "AK"],
   "reps": [
@@ -10,37 +18,46 @@
       "name": "Gene Zannetti",
       "email": "genezannetti@gmail.com",
       "bucket": "urgent",
-      "role_label": "Urgent — Gene",
-      "weekly_cap": 2,
-      "description": "Red-hot leads ready to start (~2 per week)"
+      "role_label": "Top 10% — Gene",
+      "weekly_cap": null,
+      "description": "Highest-scoring leads vs everyone else in the inbox"
     },
     {
       "id": "jake",
       "name": "Jake Hunter",
       "email": "jthunter600@gmail.com",
       "bucket": "hot_warm",
-      "role_label": "Hot & warm — Jake",
-      "weekly_cap": 5,
-      "description": "Strong leads worth fast outreach (~5 per week)"
+      "role_label": "Next 20% — Jake",
+      "weekly_cap": null,
+      "description": "Strong leads in the 70th–90th percentile band"
     },
     {
       "id": "beau",
       "name": "Beau Tillman",
       "email": "beautillman80@gmail.com",
       "bucket": "general",
-      "role_label": "General — Beau",
+      "role_label": "Middle 50% — Beau",
       "weekly_cap": null,
-      "description": "Shared pool; Eric gets West Coast first"
+      "description": "Shared pool with Eric; balanced weekly count"
     },
     {
       "id": "eric",
       "name": "Eric Spencer",
       "email": "evspencer@gmail.com",
       "bucket": "general",
-      "role_label": "General — Eric",
+      "role_label": "Middle 50% — Eric",
       "weekly_cap": null,
       "west_coast_priority": true,
-      "description": "Shared pool — West Coast leads first"
+      "description": "West Coast leads prefer Eric when in the middle band"
+    },
+    {
+      "id": "automation",
+      "name": "Automation",
+      "email": "",
+      "bucket": "automation",
+      "role_label": "Bottom 20% — automation",
+      "weekly_cap": null,
+      "description": "HubSpot workflows / sequences only — no rep email"
     }
   ]
 }

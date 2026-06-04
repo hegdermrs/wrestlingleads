@@ -178,6 +178,31 @@ export default function Rules() {
       )}
 
       <Card title="Automatic routing" subtitle="What happens when someone fills out your form" delay={60}>
+        {(rules?.routing_mode === "hybrid" || rules?.routing_mode === "percentile") && (
+          <div className="banner-warn" style={{ marginBottom: "1rem" }}>
+            <p>
+              {rules?.routing_mode === "hybrid" ? (
+                <>
+                  <strong>Hybrid mode</strong> — Urgent red-hot leads (Priority + ready soon + score ≥
+                  urgent min) go to <strong>Gene</strong> first. Everyone else is split by rank: top{" "}
+                  {rules?.distribution_gene_pct ?? 10}% Gene, next {rules?.distribution_jake_pct ?? 20}%
+                  Jake, middle {rules?.distribution_general_pct ?? 50}% Beau/Eric, bottom{" "}
+                  {rules?.distribution_automation_pct ?? 20}% automation.
+                </>
+              ) : (
+                <>
+                  <strong>Percentile mode</strong> — Gene gets the top{" "}
+                  {rules?.distribution_gene_pct ?? 10}% of scored leads in your inbox, Jake the next{" "}
+                  {rules?.distribution_jake_pct ?? 20}%, Beau &amp; Eric the middle{" "}
+                  {rules?.distribution_general_pct ?? 50}%, bottom{" "}
+                  {rules?.distribution_automation_pct ?? 20}% to automation (no rep email).
+                </>
+              )}{" "}
+              Needs at least {rules?.min_leads_for_percentile ?? 15} scored leads before percentiles
+              apply.
+            </p>
+          </div>
+        )}
         <Toggle
           checked={!!rules?.auto_route_enabled}
           onChange={(v) => setRules({ ...rules, auto_route_enabled: v })}
@@ -189,6 +214,12 @@ export default function Rules() {
           onChange={(v) => setRules({ ...rules, send_email_on_route: v })}
           label="Notify the assigned rep"
           description="Triggers n8n webhook and/or email (Resend/SMTP) when configured"
+        />
+        <Toggle
+          checked={rules?.sync_hubspot_on_route !== false}
+          onChange={(v) => setRules({ ...rules, sync_hubspot_on_route: v })}
+          label="Sync HubSpot on route"
+          description="Create or update the HubSpot contact when HUBSPOT_ACCESS_TOKEN is set on Railway"
         />
       </Card>
 
