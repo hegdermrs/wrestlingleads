@@ -10,6 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from .integrations.wufoo import wufoo_payload_to_lead_row
 from .store import is_synthetic_test_lead, store
+from .webhook_diagnostics import log_webhook_event, recent_webhook_events
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
@@ -29,7 +30,24 @@ def _verify_wufoo_secret(request: Request, payload: dict[str, Any] | None = None
         provided = provided or payload.get("HandshakeKey") or payload.get("handshakeKey")
 
     if provided != secret:
-        raise HTTPException(status_code=401, detail="Invalid Wufoo webhook secret.")
+        log_webhook_event(
+            outcome="rejected",
+            detail="invalid_secret",
+            query_form=_safe_str(request.query_params.get("form")),
+        )
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "Invalid Wufoo webhook secret. The Handshake Key on this Wufoo form must "
+                "exactly match WUFOO_WEBHOOK_SECRET on Railway (same value on every form)."
+            ),
+        )
+
+
+def _safe_str(value: object) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 async def _parse_wufoo_body(request: Request) -> dict[str, Any]:
@@ -92,6 +110,7 @@ def wufoo_webhook_status() -> dict[str, Any]:
         "cache_loaded": store.loaded,
         "cache_row_count": int(store._meta.get("row_count", 0)) if store.loaded else 0,
         "last_scored_at": store._meta.get("last_append") or store._meta.get("scored_at") if store.loaded else None,
+        "recent_webhook_events": recent_webhook_events(8),
     }
 
 
@@ -124,11 +143,10 @@ def wufoo_forms_list() -> dict[str, Any]:
     from .wufoo_forms import get_form, list_forms_public, load_forms_config, webhook_url_hint
 
     base = os.getenv("PUBLIC_API_URL", "").strip() or "https://wrestlingleads-production.up.railway.app"
-    secret = os.getenv("WUFOO_WEBHOOK_SECRET", "YOUR_SECRET")
     forms = list_forms_public()
     for summary in forms:
         full = get_form(str(summary.get("id", ""))) or summary
-        summary["webhook_url_example"] = webhook_url_hint(base, full, secret=secret)
+        summary["webhook_url_example"] = webhook_url_hint(base, full, secret="YOUR_HANDSHAKE_KEY")
     return {
         "forms": forms,
         "default_form_id": load_forms_config().get("default_form_id", "form-1"),
@@ -166,6 +184,14 @@ async def wufoo_webhook(
     form_config = resolve_form(query_form=form, payload=payload)
     row = wufoo_payload_to_lead_row(payload, form_config=form_config or None)
     if is_synthetic_test_lead(row):
+        log_webhook_event(
+            outcome="rejected",
+            detail="synthetic_test_lead",
+            entry_id=_safe_str(payload.get("EntryId") or payload.get("EntryID")),
+            email=_safe_str(row.get("Email")),
+            form_id=_safe_str((form_config or {}).get("id")),
+            query_form=_safe_str(form),
+        )
         raise HTTPException(status_code=400, detail="Synthetic test submissions are not stored.")
 
     if not row.get("Email") and not row.get("Message"):
@@ -176,12 +202,26 @@ async def wufoo_webhook(
                 status_code=500,
                 detail=f"Wufoo field map missing on server ({WOOFOO_MAP_PATH}). Redeploy latest Docker image.",
             )
+        log_webhook_event(
+            outcome="rejected",
+            detail="missing_email_and_message",
+            entry_id=_safe_str(payload.get("EntryId") or payload.get("EntryID")),
+            form_id=_safe_str((form_config or {}).get("id")),
+            query_form=_safe_str(form),
+        )
         raise HTTPException(
             status_code=400,
             detail="Webhook missing mappable lead fields. Check wufoo_forms.json for this form.",
         )
 
     entry_id = payload.get("EntryId") or payload.get("EntryID") or row.get("Record ID")
+    log_webhook_event(
+        outcome="accepted",
+        entry_id=_safe_str(entry_id),
+        email=_safe_str(row.get("Email")),
+        form_id=_safe_str((form_config or {}).get("id")),
+        query_form=_safe_str(form),
+    )
     logger.info(
         "Wufoo webhook accepted entry=%s email=%s form=%s",
         entry_id,

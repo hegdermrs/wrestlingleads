@@ -163,10 +163,9 @@ def list_forms_public() -> list[dict[str, Any]]:
     return rows
 
 
-def webhook_url_hint(base_url: str, form: dict[str, Any], secret: str = "YOUR_SECRET") -> str:
+def webhook_url_hint(base_url: str, form: dict[str, Any], secret: str = "") -> str:
     form_key = _safe_str(form.get("webhook_query_form")) or _safe_str(form.get("id"))
-    sep = "&" if "?" in base_url else "?"
-    url = f"{base_url.rstrip('/')}/webhooks/wufoo?secret={secret}"
+    url = f"{base_url.rstrip('/')}/webhooks/wufoo"
     if form_key:
-        url += f"&form={form_key}"
+        url += f"?form={form_key}"
     return url
