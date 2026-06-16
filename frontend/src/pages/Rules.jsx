@@ -325,8 +325,10 @@ export default function Rules() {
         <Card delay={112}>
           <h3 className="card-title">Wufoo forms</h3>
           <p className="card-copy">
-            Each form uses the same app webhook with a different <code>?form=</code> id. Form 1 uses AI scoring +
-            Team rules. Other forms can skip AI routing and go straight to fixed reps (e.g. Beau / Eric).
+            Each form uses the same app webhook with a different <code>?form=</code> id. Set{" "}
+            <code>field_map</code> (Wufoo → column) and <code>display_fields</code> (column → email label) in{" "}
+            <code>config/wufoo_forms.json</code>. Form 1 uses AI scoring + Team rules. Other forms can use fixed
+            reps (e.g. Beau / Eric).
           </p>
           <div className="dist-table-wrap">
             <table className="dist-table">
@@ -334,7 +336,8 @@ export default function Rules() {
                 <tr>
                   <th>Form</th>
                   <th>Routing</th>
-                  <th>Reps</th>
+                  <th>Fields</th>
+                  <th>Email fields</th>
                   <th>Wufoo webhook URL</th>
                 </tr>
               </thead>
@@ -346,7 +349,8 @@ export default function Rules() {
                       <div className="field-hint">{f.id}</div>
                     </td>
                     <td>{f.routing_policy === "ai" ? "AI + Team rules" : f.routing_policy === "fixed_reps" ? "Fixed reps" : f.routing_policy}</td>
-                    <td>{(f.fixed_rep_ids || []).join(", ") || "—"}</td>
+                    <td>{f.field_count ?? "—"} mapped</td>
+                    <td>{f.display_field_count ?? "—"} in email</td>
                     <td>
                       <code style={{ fontSize: "0.75rem", wordBreak: "break-all" }}>{f.webhook_url_example}</code>
                     </td>

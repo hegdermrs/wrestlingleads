@@ -1,7 +1,7 @@
 {
   "default_form_id": "form-1",
   "subdomain": "wrestlingmindset",
-  "note": "Each Wufoo form uses the same webhook base URL with a different ?form= id. policy: ai = score + Team rules; fixed_reps = assign rep_ids only; off = intake only (no route/n8n).",
+  "note": "Each Wufoo form uses the same webhook base URL with a different ?form= id. display_fields controls rep email / n8n body.lead.form (column + label pairs). field_map maps Wufoo FieldN → column names on the lead row.",
   "forms": [
     {
       "id": "form-1",
@@ -59,25 +59,115 @@
         "UTM Term": "UTM Term",
         "UTM Content": "UTM Content",
         "UTM Keyword": "UTM Keyword"
-      }
+      },
+      "display_fields": [
+        ["Email", "Email"],
+        ["Job Title", "Which best describes you"],
+        ["Phone Number", "Cell Phone Number (Parent)"],
+        ["State/Region", "State"],
+        ["Wrestler's Grade", "Wrestler's Grade"],
+        ["Years experience", "Years of Experience"],
+        ["Wrestler's Goal", "Wrestler's Goal"],
+        ["Deadline for Goal", "Is there a deadline for this goal?"],
+        ["Job function", "Reason for Inquiry"],
+        ["Relationship Status", "How willing is your wrestler to start mindset training?"],
+        ["Source", "Where did you hear about Wrestling Mindset?"],
+        ["Investment Level", "Preferred investment level"],
+        ["Club/Team Promo Code", "Club/Team Promo Code"],
+        ["Message", "Additional wrestling information"],
+        ["UTM Source", "UTM Source"],
+        ["UTM Medium", "UTM Medium"],
+        ["UTM Campaign", "UTM Campaign"],
+        ["UTM Term", "UTM Term"],
+        ["UTM Content", "UTM Content"],
+        ["UTM Keyword", "UTM Keyword"]
+      ]
     },
     {
       "id": "form-2",
-      "label": "Form 2 — Beau / Eric (example)",
-      "wufoo_name": "",
-      "wufoo_hash": "",
+      "label": "Schedule free trial session (Winning Mindset)",
+      "wufoo_name": "schedule-free-trial-session-winning-mindset",
+      "wufoo_hash": "wkqxu1q0axrrcy",
       "webhook_query_form": "form-2",
       "routing": {
         "policy": "fixed_reps",
         "fixed_rep_ids": ["beau", "eric"],
         "fixed_rep_pick": "round_robin",
-        "score_with_ai": true,
+        "score_with_ai": false,
         "auto_route": true,
         "send_to_n8n": true,
         "require_coaching_signals": false
       },
-      "field_map": {},
-      "title_map": {}
+      "field_map": {
+        "Field1": "First Name",
+        "Field2": "Last Name",
+        "Field9": "Email",
+        "Field10": "Phone Number",
+        "Field113": "Message",
+        "Field119": "Sport",
+        "Field121": "Customer Type",
+        "Field122": "Source"
+      },
+      "title_map": {
+        "Primary sport involved with...": "Sport",
+        "Select a Choice": "Customer Type",
+        "Cell Phone Number": "Phone Number",
+        "Where did you hear about Winning Mindset?": "Source",
+        "Info about your Team(s) or Athlete (i.e. location, size, competitive level, struggles, other teams your work with, etc.)": "Message"
+      },
+      "display_fields": [
+        ["First Name", "First"],
+        ["Last Name", "Last"],
+        ["Email", "Email"],
+        ["Sport", "Primary sport involved with"],
+        ["Customer Type", "Select a Choice"],
+        ["Phone Number", "Cell Phone Number"],
+        ["Source", "Where did you hear about Winning Mindset?"],
+        ["Message", "Info about your Team(s) or Athlete"]
+      ]
+    },
+    {
+      "id": "form-3",
+      "label": "Contact us",
+      "wufoo_name": "contact-us",
+      "wufoo_hash": "zx34p0x1bkkmnd",
+      "webhook_query_form": "form-3",
+      "routing": {
+        "policy": "fixed_reps",
+        "fixed_rep_ids": ["gene"],
+        "fixed_rep_pick": "first",
+        "score_with_ai": false,
+        "auto_route": true,
+        "send_to_n8n": true,
+        "require_coaching_signals": false
+      },
+      "field_map": {
+        "Field1": "First Name",
+        "Field2": "Last Name",
+        "Field9": "Email",
+        "Field443": "Job Title",
+        "Field10": "Phone Number",
+        "Field333": "State/Region",
+        "Field117": "Source",
+        "Field113": "Message"
+      },
+      "title_map": {
+        "Which best describes you...": "Job Title",
+        "Cell Phone Number (Parent)": "Phone Number",
+        "State": "State/Region",
+        "Where did you hear about Wrestling Mindset?": "Source",
+        "Additional wrestler information": "Message"
+      },
+      "display_fields": [
+        ["First Name", "First"],
+        ["Last Name", "Last"],
+        ["Email", "Email"],
+        ["Job Title", "Which best describes you"],
+        ["Phone Number", "Cell Phone Number (Parent)"],
+        ["State/Region", "State"],
+        ["Source", "Where did you hear about Wrestling Mindset?"],
+        ["Message", "Additional wrestler information"]
+      ]
     }
   ]
 }

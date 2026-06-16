@@ -10,7 +10,7 @@ import pandas as pd
 
 from .features import _safe_str
 from .integrations.hubspot import hubspot_owner_id_for_rep, hubspot_owner_resolve_note
-from .lead_form_fields import form_entries_for_row
+from .lead_form_fields import form_entries_for_row, resolve_form_config_for_row
 from .routing_notify import build_assignment_email
 
 
@@ -26,10 +26,15 @@ def n8n_configured() -> bool:
     return bool(n8n_webhook_url())
 
 
-def _lead_payload(row: pd.Series | dict[str, Any]) -> dict[str, Any]:
+def _lead_payload(
+    row: pd.Series | dict[str, Any],
+    *,
+    form_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     get = row.get if isinstance(row, dict) else row.get
     first = _safe_str(get("First Name", ""))
     last = _safe_str(get("Last Name", ""))
+    resolved = resolve_form_config_for_row(row, form_config)
     return {
         "record_id": _safe_str(get("Record ID", "")),
         "first_name": first,
@@ -55,7 +60,9 @@ def _lead_payload(row: pd.Series | dict[str, Any]) -> dict[str, Any]:
         "utm_source": _safe_str(get("UTM Source", "")),
         "utm_medium": _safe_str(get("UTM Medium", "")),
         "utm_campaign": _safe_str(get("UTM Campaign", "")),
-        "form": {label: val for label, val in form_entries_for_row(row)},
+        "form": {
+            label: val for label, val in form_entries_for_row(row, form_config=resolved)
+        },
     }
 
 
@@ -85,17 +92,20 @@ def build_n8n_payload(
     test: bool = False,
     form_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    subject, text, html = build_assignment_email(row, rep, assignment)
-    routing = (form_config or {}).get("routing") or {}
+    resolved_form = resolve_form_config_for_row(row, form_config)
+    subject, text, html = build_assignment_email(
+        row, rep, assignment, form_config=resolved_form
+    )
+    routing = (resolved_form or form_config or {}).get("routing") or {}
     payload: dict[str, Any] = {
         "event": "lead_assignment_test" if test else "lead_assigned",
         "test": test,
-        "lead": _lead_payload(row),
+        "lead": _lead_payload(row, form_config=resolved_form),
         "rep": _rep_payload_for_n8n(rep),
         "assignment": {
             "route_bucket": assignment.get("route_bucket", ""),
             "route_reason": assignment.get("route_reason", ""),
-            "form_id": assignment.get("form_id") or _safe_str((form_config or {}).get("id")),
+            "form_id": assignment.get("form_id") or _safe_str((resolved_form or {}).get("id")),
         },
         "email": {
             "subject": subject,
@@ -105,12 +115,12 @@ def build_n8n_payload(
             "format": "html",
         },
     }
-    if form_config:
+    if resolved_form:
         payload["form"] = {
-            "id": _safe_str(form_config.get("id")),
-            "label": _safe_str(form_config.get("label")),
+            "id": _safe_str(resolved_form.get("id")),
+            "label": _safe_str(resolved_form.get("label")),
             "routing_policy": _safe_str(routing.get("policy", "ai")),
-            "wufoo_name": _safe_str(form_config.get("wufoo_name")),
+            "wufoo_name": _safe_str(resolved_form.get("wufoo_name")),
         }
     return payload
 

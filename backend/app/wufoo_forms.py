@@ -125,6 +125,7 @@ def list_forms_public() -> list[dict[str, Any]]:
                 "auto_route": routing.get("auto_route", True),
                 "send_to_n8n": routing.get("send_to_n8n", True),
                 "field_count": len(form.get("field_map") or {}),
+                "display_field_count": len(form.get("display_fields") or []),
             }
         )
     return rows

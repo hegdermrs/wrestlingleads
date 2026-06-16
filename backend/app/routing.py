@@ -595,7 +595,9 @@ def route_and_notify(
 
         if email_configured():
             try:
-                email_sent = send_lead_assignment_email(row, rep, assignment)
+                email_sent = send_lead_assignment_email(
+                    row, rep, assignment, form_config=form_config
+                )
             except Exception as exc:
                 notify_error = str(exc)
         elif not n8n_configured():

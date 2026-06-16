@@ -328,8 +328,12 @@ def _build_assignment_html(
     rep_first: str,
     name: str,
     row: pd.Series | dict[str, Any],
+    form_config: dict[str, Any] | None = None,
 ) -> str:
-    form_rows = "".join(_html_row(label, val) for label, val in form_entries_for_row(row))
+    form_rows = "".join(
+        _html_row(label, val)
+        for label, val in form_entries_for_row(row, form_config=form_config)
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -378,15 +382,27 @@ def build_assignment_email(
     row: pd.Series | dict[str, Any],
     rep: dict[str, Any],
     assignment: dict[str, Any],
+    *,
+    form_config: dict[str, Any] | None = None,
 ) -> tuple[str, str, str]:
     """Return subject, plain text body, html body."""
+    from .lead_form_fields import resolve_form_config_for_row
+
+    resolved_form = resolve_form_config_for_row(row, form_config)
     name = lead_display_name(row)
-    subject = f"New wrestling lead: {name}"
+    form_label = _safe_str((resolved_form or {}).get("label"))
+    if form_label:
+        subject = f"New lead ({form_label}): {name}"
+    else:
+        subject = f"New wrestling lead: {name}"
 
     rep_first = _safe_str(rep.get("name", "there")).split()[0] or "there"
 
     lines = [f"Hi {rep_first},", "", "NEW LEAD ASSIGNED", "", name, ""]
-    for label, val in form_entries_for_row(row):
+    if form_label:
+        lines.append(f"Form: {form_label}")
+        lines.append("")
+    for label, val in form_entries_for_row(row, form_config=resolved_form):
         lines.append(f"{label}: {val}")
     lines.extend(["", "— LeadsWrestling"])
     text = "\n".join(lines)
@@ -395,6 +411,7 @@ def build_assignment_email(
         rep_first=rep_first,
         name=name,
         row=row,
+        form_config=resolved_form,
     )
 
     return subject, text, html
@@ -404,6 +421,8 @@ def send_lead_assignment_email(
     row: pd.Series | dict[str, Any],
     rep: dict[str, Any],
     assignment: dict[str, Any],
+    *,
+    form_config: dict[str, Any] | None = None,
 ) -> bool:
     """Send assignment email via Resend (HTTPS) or SMTP."""
     rep_email = _safe_str(rep.get("email"))
@@ -418,7 +437,7 @@ def send_lead_assignment_email(
     if not to_email:
         raise RuntimeError("Rep must have an email, or set RESEND_SANDBOX_TO for sandbox mode.")
 
-    subject, text, html = build_assignment_email(row, rep, assignment)
+    subject, text, html = build_assignment_email(row, rep, assignment, form_config=form_config)
     if sandbox_banner:
         subject = f"[Sandbox · for {rep.get('name', rep_email)}] {subject}"
         text = f"{sandbox_banner}\n\n{text}"

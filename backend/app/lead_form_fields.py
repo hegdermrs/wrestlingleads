@@ -51,11 +51,15 @@ WUFOO_TITLE_ALIASES: dict[str, str] = {
     "How willing to start mindset training": "Relationship Status",
     "How willing is your wrestler to start mindset training?": "Relationship Status",
     "Where did you hear about Wrestling Mindset": "Source",
-    "Where did you hear about Wrestling Mindset?": "Source",
+    "Where did you hear about Winning Mindset?": "Source",
+    "Primary sport involved with...": "Sport",
+    "Select a Choice": "Customer Type",
+    "Info about your Team(s) or Athlete (i.e. location, size, competitive level, struggles, other teams your work with, etc.)": "Message",
     "Preferred investment level": "Investment Level",
     "Which best describes your preferred investment level?": "Investment Level",
     "What level of investment are you ready to make to achieve your goals?": "Investment Level",
     "Additional wrestling information": "Message",
+    "Additional wrestler information": "Message",
     "Additional wrestler/team info (i.e. location, competitive level, struggles, etc.)": "Message",
     "Phone Number": "Phone Number",
     "State/Region": "State/Region",
@@ -110,18 +114,72 @@ def lead_display_name(row: pd.Series | dict[str, Any]) -> str:
     return name or _safe_str(get("Email", "")) or "Lead"
 
 
+def parse_display_fields(raw: object) -> list[tuple[str, str]]:
+    """Parse wufoo_forms.json display_fields: [[column, label], ...] or {column, label} objects."""
+    if not raw or not isinstance(raw, list):
+        return []
+    out: list[tuple[str, str]] = []
+    for item in raw:
+        if isinstance(item, (list, tuple)) and len(item) >= 2:
+            col, label = _safe_str(item[0]), _safe_str(item[1])
+        elif isinstance(item, dict):
+            col = _safe_str(item.get("column") or item.get("key") or item.get("field"))
+            label = _safe_str(item.get("label") or item.get("title") or col)
+        else:
+            continue
+        if col and label:
+            out.append((col, label))
+    return out
+
+
+def default_display_fields() -> list[tuple[str, str]]:
+    return list(LEAD_FORM_FIELDS)
+
+
+def display_fields_for_form(form_config: dict[str, Any] | None) -> list[tuple[str, str]]:
+    """Per-form email / n8n field list; falls back to Form 1 defaults."""
+    if form_config:
+        parsed = parse_display_fields(form_config.get("display_fields"))
+        if parsed:
+            return parsed
+    return default_display_fields()
+
+
+def resolve_form_config_for_row(
+    row: pd.Series | dict[str, Any],
+    form_config: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Use explicit form config or look up Wufoo Form Id stored on the lead row."""
+    if form_config:
+        return form_config
+    get = row.get if isinstance(row, dict) else row.get
+    form_id = _safe_str(get("Wufoo Form Id", ""))
+    if not form_id:
+        return None
+    from .wufoo_forms import get_form
+
+    return get_form(form_id)
+
+
 def form_entries_for_row(
     row: pd.Series | dict[str, Any],
     *,
+    form_config: dict[str, Any] | None = None,
     include_empty: bool = False,
 ) -> list[tuple[str, str]]:
     """Label/value pairs for form submission. Skips empty unless include_empty=True."""
     get = row.get if isinstance(row, dict) else row.get
+    resolved = resolve_form_config_for_row(row, form_config)
+    fields = display_fields_for_form(resolved)
+
     out: list[tuple[str, str]] = []
-    name = lead_display_name(row)
-    if name and name != "Lead":
-        out.append(("Name", name))
-    for key, label in LEAD_FORM_FIELDS:
+    has_name_cols = any(key in ("First Name", "Last Name") for key, _ in fields)
+    if not has_name_cols:
+        name = lead_display_name(row)
+        if name and name != "Lead":
+            out.append(("Name", name))
+
+    for key, label in fields:
         val = _safe_str(get(key, ""))
         if val or include_empty:
             out.append((label, val))
