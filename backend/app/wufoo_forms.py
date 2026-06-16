@@ -70,8 +70,52 @@ def default_form() -> dict[str, Any]:
     return get_form(fid) or next(iter(forms_by_id().values()), {})
 
 
+def _payload_form_identifiers(payload: dict[str, Any]) -> list[str]:
+    """Collect Wufoo form hash / name / url tokens from webhook POST keys."""
+    ids: list[str] = []
+
+    def add(value: object) -> None:
+        text = _safe_str(value)
+        if text and text not in ids:
+            ids.append(text)
+
+    for key in ("FormHash", "Hash", "formHash", "FormName", "FormUrl", "Url"):
+        add(payload.get(key))
+
+    form_structure = payload.get("FormStructure")
+    if form_structure:
+        parsed: dict[str, Any] | None = None
+        if isinstance(form_structure, dict):
+            parsed = form_structure
+        elif isinstance(form_structure, str):
+            try:
+                raw = json.loads(form_structure)
+                if isinstance(raw, dict):
+                    parsed = raw
+            except json.JSONDecodeError:
+                pass
+        if parsed:
+            for key in ("Hash", "Url", "Name"):
+                add(parsed.get(key))
+
+    return ids
+
+
+def _form_from_payload_identifiers(
+    payload: dict[str, Any],
+    by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    for token in _payload_form_identifiers(payload):
+        for form in by_id.values():
+            if token == _safe_str(form.get("wufoo_hash")):
+                return form
+            if token == _safe_str(form.get("wufoo_name")):
+                return form
+    return None
+
+
 def resolve_form(*, query_form: str | None = None, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Pick form config from webhook ?form= id, payload hash, or default."""
+    """Pick form config from webhook ?form= id, payload hash/name, or default."""
     by_id = forms_by_id()
     if not by_id:
         return {}
@@ -81,21 +125,9 @@ def resolve_form(*, query_form: str | None = None, payload: dict[str, Any] | Non
         return by_id[q]
 
     payload = payload or {}
-    hash_candidates = [
-        payload.get("FormHash"),
-        payload.get("Hash"),
-        payload.get("formHash"),
-        payload.get("FormStructure"),
-    ]
-    for raw in hash_candidates:
-        h = _safe_str(raw)
-        if not h:
-            continue
-        for form in by_id.values():
-            if h == _safe_str(form.get("wufoo_hash")):
-                return form
-            if h == _safe_str(form.get("wufoo_name")):
-                return form
+    matched = _form_from_payload_identifiers(payload, by_id)
+    if matched:
+        return matched
 
     for form in by_id.values():
         qid = _safe_str(form.get("webhook_query_form"))
