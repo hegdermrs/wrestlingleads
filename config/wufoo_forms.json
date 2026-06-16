@@ -1,0 +1,83 @@
+{
+  "default_form_id": "form-1",
+  "subdomain": "wrestlingmindset",
+  "note": "Each Wufoo form uses the same webhook base URL with a different ?form= id. policy: ai = score + Team rules; fixed_reps = assign rep_ids only; off = intake only (no route/n8n).",
+  "forms": [
+    {
+      "id": "form-1",
+      "label": "Next steps with Wrestling Mindset (1-on-1)",
+      "wufoo_name": "next-steps-with-wrestling-mindset",
+      "wufoo_hash": "zccfk001m6117",
+      "webhook_query_form": "form-1",
+      "routing": {
+        "policy": "ai",
+        "score_with_ai": true,
+        "auto_route": true,
+        "send_to_n8n": true,
+        "require_coaching_signals": true
+      },
+      "field_map": {
+        "Field1": "First Name",
+        "Field2": "Last Name",
+        "Field9": "Email",
+        "Field443": "Job Title",
+        "Field10": "Phone Number",
+        "Field449": "State/Region",
+        "Field450": "Wrestler's Grade",
+        "Field451": "Years experience",
+        "Field325": "Wrestler's Goal",
+        "Field335": "Deadline for Goal",
+        "Field326": "Job function",
+        "Field340": "Relationship Status",
+        "Field117": "Source",
+        "Field445": "Investment Level",
+        "Field447": "Club/Team Promo Code",
+        "Field113": "Message",
+        "Field453": "UTM Source",
+        "Field454": "UTM Medium",
+        "Field455": "UTM Campaign",
+        "Field456": "UTM Term",
+        "Field457": "UTM Content",
+        "Field458": "UTM Keyword"
+      },
+      "title_map": {
+        "Which best describes you...": "Job Title",
+        "Cell Phone Number (Parent)": "Phone Number",
+        "State": "State/Region",
+        "Wrestler's Grade": "Wrestler's Grade",
+        "Years of Experience": "Years experience",
+        "Is there a deadline for this goal?": "Deadline for Goal",
+        "Reason for Inquiry (choose one)": "Job function",
+        "How willing is your wrestler to start mindset training?": "Relationship Status",
+        "Where did you hear about Wrestling Mindset?": "Source",
+        "Which best describes your preferred investment level?": "Investment Level",
+        "Club/Team Promo Code": "Club/Team Promo Code",
+        "Additional wrestling information": "Message",
+        "UTM Source": "UTM Source",
+        "UTM Medium": "UTM Medium",
+        "UTM Campaign": "UTM Campaign",
+        "UTM Term": "UTM Term",
+        "UTM Content": "UTM Content",
+        "UTM Keyword": "UTM Keyword"
+      }
+    },
+    {
+      "id": "form-2",
+      "label": "Form 2 — Beau / Eric (example)",
+      "wufoo_name": "",
+      "wufoo_hash": "",
+      "webhook_query_form": "form-2",
+      "routing": {
+        "policy": "fixed_reps",
+        "fixed_rep_ids": ["beau", "eric"],
+        "fixed_rep_pick": "round_robin",
+        "score_with_ai": true,
+        "auto_route": true,
+        "send_to_n8n": true,
+        "require_coaching_signals": false
+      },
+      "field_map": {},
+      "title_map": {}
+    }
+  ]
+}

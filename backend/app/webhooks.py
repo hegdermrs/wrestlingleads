@@ -44,18 +44,27 @@ async def _parse_wufoo_body(request: Request) -> dict[str, Any]:
     return {key: form.get(key) for key in form.keys()}
 
 
-async def _score_wufoo_lead(row: dict[str, Any], use_llm: bool) -> None:
+async def _score_wufoo_lead(
+    row: dict[str, Any],
+    use_llm: bool,
+    form_config: dict[str, Any] | None = None,
+) -> None:
     """Score in background — Wufoo expects a 2xx response within a few seconds."""
     try:
-        result = await store.append_lead(row, use_llm=use_llm)
+        result = await store.append_lead(row, use_llm=use_llm, form_config=form_config)
         logger.info(
-            "Wufoo lead scored email=%s tier=%s routed=%s",
+            "Wufoo lead scored email=%s form=%s tier=%s routed=%s",
             result.get("email"),
+            (form_config or {}).get("id"),
             result.get("ai_tier"),
             (result.get("routing") or {}).get("assigned"),
         )
     except Exception:
-        logger.exception("Wufoo background scoring failed for email=%s", row.get("Email"))
+        logger.exception(
+            "Wufoo background scoring failed for email=%s form=%s",
+            row.get("Email"),
+            (form_config or {}).get("id"),
+        )
 
 
 @router.get("/wufoo/status")
@@ -109,11 +118,34 @@ async def wufoo_sync_fields(request: Request) -> dict[str, Any]:
     return {"ok": True, "mapped_field_count": len(field_map)}
 
 
+@router.get("/wufoo/forms")
+def wufoo_forms_list() -> dict[str, Any]:
+    """Per-form routing config and webhook URL hints."""
+    from .wufoo_forms import get_form, list_forms_public, load_forms_config, webhook_url_hint
+
+    base = os.getenv("PUBLIC_API_URL", "").strip() or "https://wrestlingleads-production.up.railway.app"
+    secret = os.getenv("WUFOO_WEBHOOK_SECRET", "YOUR_SECRET")
+    forms = list_forms_public()
+    for summary in forms:
+        full = get_form(str(summary.get("id", ""))) or summary
+        summary["webhook_url_example"] = webhook_url_hint(base, full, secret=secret)
+    return {
+        "forms": forms,
+        "default_form_id": load_forms_config().get("default_form_id", "form-1"),
+        "policies": {
+            "ai": "Score with AI + Team distribution rules + n8n",
+            "fixed_reps": "Always assign to fixed_rep_ids (round robin)",
+            "off": "Store/score only — no route or n8n",
+        },
+    }
+
+
 @router.post("/wufoo")
 async def wufoo_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
     use_llm: bool = True,
+    form: str | None = None,
 ) -> dict[str, Any]:
     """
     Receive a Wufoo form submission, score it, and append to dashboard cache.
@@ -129,33 +161,45 @@ async def wufoo_webhook(
 
     _verify_wufoo_secret(request, payload)
 
-    row = wufoo_payload_to_lead_row(payload)
+    from .wufoo_forms import resolve_form
+
+    form_config = resolve_form(query_form=form, payload=payload)
+    row = wufoo_payload_to_lead_row(payload, form_config=form_config or None)
     if is_synthetic_test_lead(row):
         raise HTTPException(status_code=400, detail="Synthetic test submissions are not stored.")
 
     if not row.get("Email") and not row.get("Message"):
         from .integrations.wufoo import WOOFOO_MAP_PATH, load_wufoo_map
 
-        if not load_wufoo_map():
+        if not load_wufoo_map(form_config) and not form_config:
             raise HTTPException(
                 status_code=500,
                 detail=f"Wufoo field map missing on server ({WOOFOO_MAP_PATH}). Redeploy latest Docker image.",
             )
         raise HTTPException(
             status_code=400,
-            detail="Webhook missing mappable lead fields. Check wufoo_field_map.json.",
+            detail="Webhook missing mappable lead fields. Check wufoo_forms.json for this form.",
         )
 
     entry_id = payload.get("EntryId") or payload.get("EntryID") or row.get("Record ID")
-    logger.info("Wufoo webhook accepted entry=%s email=%s", entry_id, row.get("Email"))
+    logger.info(
+        "Wufoo webhook accepted entry=%s email=%s form=%s",
+        entry_id,
+        row.get("Email"),
+        (form_config or {}).get("id"),
+    )
+
+    routing = (form_config or {}).get("routing") or {}
+    score_with_ai = routing.get("score_with_ai", True)
 
     # Reply immediately — Wufoo times out if DeepSeek scoring blocks the HTTP response.
-    background_tasks.add_task(_score_wufoo_lead, row, use_llm)
+    background_tasks.add_task(_score_wufoo_lead, row, use_llm and score_with_ai, form_config)
 
     return {
         "success": True,
         "status": "accepted",
         "entry_id": entry_id,
         "email": row.get("Email"),
+        "form_id": (form_config or {}).get("id"),
         "message": "Lead queued for scoring — check dashboard in ~30 seconds",
     }

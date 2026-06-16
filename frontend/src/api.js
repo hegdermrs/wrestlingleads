@@ -330,6 +330,10 @@ export function fetchRoutingStats() {
   return fetchJson("/routing/stats");
 }
 
+export function fetchWufooForms() {
+  return fetchJson("/webhooks/wufoo/forms");
+}
+
 export function sendRoute(email, { force = false, send_email = true } = {}) {
   return fetchJson("/routing/send", {
     method: "POST",

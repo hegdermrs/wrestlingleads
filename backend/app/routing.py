@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from .features import URGENT_DEADLINE_KEYWORDS, _safe_str, has_coaching_signals, is_sparse_subscriber
-from .routing_config import load_routing_config, reps_for_bucket
+from .routing_config import get_rep_by_id, load_routing_config, reps_for_bucket
 from .scoring_config import get_tier_thresholds
 from .routing_log import append_routing_entry, count_rep_this_week, was_lead_routed
 from .routing_notify import send_lead_assignment_email, email_configured
@@ -110,6 +110,101 @@ def should_route_lead(row: pd.Series | dict[str, Any]) -> tuple[bool, str]:
     if tier == "Unqualified":
         return False, "Unqualified tier"
     return True, ""
+
+
+def should_route_lead_for_form(
+    row: pd.Series | dict[str, Any],
+    form_config: dict[str, Any] | None,
+) -> tuple[bool, str]:
+    """Per-form gate before assignment (fixed-rep forms can relax coaching-signal checks)."""
+    routing = (form_config or {}).get("routing") or {}
+    policy = _safe_str(routing.get("policy", "ai")).lower()
+    if policy == "off":
+        return False, "Form configured for intake only (no routing)"
+
+    get = row.get if isinstance(row, dict) else row.get
+    lifecycle = _safe_str(get("Lifecycle Stage", ""))
+    if lifecycle == "Customer":
+        return False, "Already a customer"
+
+    if policy == "fixed_reps" and not routing.get("require_coaching_signals", False):
+        if not _safe_str(get("Email", "")):
+            return False, "No email on submission"
+        return True, ""
+
+    return should_route_lead(row)
+
+
+def _pick_fixed_rep(
+    config: dict[str, Any],
+    form_config: dict[str, Any],
+) -> dict[str, Any] | None:
+    routing = form_config.get("routing") or {}
+    rep_ids = list(routing.get("fixed_rep_ids") or routing.get("rep_ids") or [])
+    if not rep_ids:
+        return None
+
+    candidates: list[dict[str, Any]] = []
+    for rep_id in rep_ids:
+        rep = get_rep_by_id(config, _safe_str(rep_id))
+        if rep and _rep_under_cap(rep):
+            candidates.append(rep)
+    if not candidates:
+        for rep_id in rep_ids:
+            rep = get_rep_by_id(config, _safe_str(rep_id))
+            if rep:
+                candidates.append(rep)
+    if not candidates:
+        return None
+
+    pick_mode = _safe_str(routing.get("fixed_rep_pick", "round_robin")).lower()
+    if pick_mode == "first":
+        return candidates[0]
+
+    counts = {rid: count_rep_this_week(rid) for rid in rep_ids}
+    return min(candidates, key=lambda rep: counts.get(_safe_str(rep.get("id")), 0))
+
+
+def _assign_fixed_reps(
+    row: pd.Series | dict[str, Any],
+    config: dict[str, Any],
+    form_config: dict[str, Any],
+) -> dict[str, Any]:
+    rep = _pick_fixed_rep(config, form_config)
+    if not rep:
+        return {
+            "assigned": False,
+            "skipped_reason": "Fixed-rep form has no matching reps on Team",
+        }
+    label = _safe_str(form_config.get("label")) or _safe_str(form_config.get("id"))
+    return {
+        "assigned": True,
+        "rep": rep,
+        "route_bucket": "form_fixed",
+        "route_reason": _assigned_reason(rep, f"Form: {label}"),
+        "distribution_band": "form_fixed",
+        "form_id": _safe_str(form_config.get("id")),
+    }
+
+
+def _form_routing_policy(form_config: dict[str, Any] | None) -> str:
+    if not form_config:
+        return "ai"
+    return _safe_str((form_config.get("routing") or {}).get("policy", "ai")).lower()
+
+
+def _form_send_to_n8n(form_config: dict[str, Any] | None) -> bool:
+    if not form_config:
+        return True
+    return bool((form_config.get("routing") or {}).get("send_to_n8n", True))
+
+
+def _form_auto_route(form_config: dict[str, Any] | None, config: dict[str, Any]) -> bool:
+    if form_config:
+        routing = form_config.get("routing") or {}
+        if "auto_route" in routing:
+            return bool(routing.get("auto_route"))
+    return bool(config.get("auto_route_enabled", True))
 
 
 def _rep_under_cap(rep: dict[str, Any]) -> bool:
@@ -352,10 +447,11 @@ def assign_rep(
     config: dict[str, Any] | None = None,
     *,
     ignore_prior: bool = False,
+    form_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Pick rep and bucket for a lead without sending email."""
     config = config or load_routing_config()
-    ok, skip = should_route_lead(row)
+    ok, skip = should_route_lead_for_form(row, form_config)
     if not ok:
         return {"assigned": False, "skipped_reason": skip}
 
@@ -363,6 +459,10 @@ def assign_rep(
     email = _safe_str(get("Email", ""))
     if email and not ignore_prior and was_lead_routed(email):
         return {"assigned": False, "skipped_reason": "Lead already routed this cycle"}
+
+    policy = _form_routing_policy(form_config)
+    if policy == "fixed_reps" and form_config:
+        return _assign_fixed_reps(row, config, form_config)
 
     mode = _safe_str(config.get("routing_mode", "hybrid")).lower()
     if mode == "hybrid":
@@ -377,10 +477,11 @@ def route_and_notify(
     config: dict[str, Any] | None = None,
     *,
     ignore_prior: bool = False,
+    form_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assign rep, log, optionally email, return routing result."""
     config = config or load_routing_config()
-    assignment = assign_rep(row, config, ignore_prior=ignore_prior)
+    assignment = assign_rep(row, config, ignore_prior=ignore_prior, form_config=form_config)
     if not assignment.get("assigned"):
         return assignment
 
@@ -405,13 +506,18 @@ def route_and_notify(
     skip_notify = assignment.get("route_bucket") == "automation" and config.get(
         "automation_skip_notify", True
     )
+    send_n8n = _form_send_to_n8n(form_config)
 
     if config.get("send_email_on_route", True) and not skip_notify:
-        if n8n_configured():
+        if n8n_configured() and send_n8n:
             try:
-                n8n_sent = send_n8n_assignment_notification(row, rep, assignment)
+                n8n_sent = send_n8n_assignment_notification(
+                    row, rep, assignment, form_config=form_config
+                )
             except Exception as exc:
                 n8n_error = str(exc)
+        elif n8n_configured() and not send_n8n:
+            n8n_error = "Skipped n8n for this form (send_to_n8n=false)"
 
         if email_configured():
             try:

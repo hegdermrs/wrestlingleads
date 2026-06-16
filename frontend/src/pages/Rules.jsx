@@ -5,6 +5,7 @@ import {
   fetchRoutingRules,
   fetchRoutingStats,
   fetchScoringRubric,
+  fetchWufooForms,
   saveRoutingRules,
   saveScoringRubric,
   sendRoute,
@@ -41,18 +42,21 @@ export default function Rules() {
   const [coachingBoost, setCoachingBoost] = useState(8);
   const [icpLlmMin, setIcpLlmMin] = useState(68);
   const [hubspotOwners, setHubspotOwners] = useState([]);
+  const [wufooForms, setWufooForms] = useState([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [r, s, rubricData] = await Promise.all([
+      const [r, s, rubricData, formsData] = await Promise.all([
         fetchRoutingRules(),
         fetchRoutingStats(),
         fetchScoringRubric().catch(() => null),
+        fetchWufooForms().catch(() => ({ forms: [] })),
       ]);
       setRules(r);
       setStats(s);
+      setWufooForms(formsData?.forms || []);
       if (rubricData?.tiers) setRubric(rubricData.tiers);
       if (rubricData?.coaching_score_boost != null) setCoachingBoost(rubricData.coaching_score_boost);
       if (rubricData?.icp_llm_min != null) setIcpLlmMin(rubricData.icp_llm_min);
@@ -316,6 +320,47 @@ export default function Rules() {
           })}
         </div>
       </Card>
+
+      {wufooForms.length > 0 && (
+        <Card delay={112}>
+          <h3 className="card-title">Wufoo forms</h3>
+          <p className="card-copy">
+            Each form uses the same app webhook with a different <code>?form=</code> id. Form 1 uses AI scoring +
+            Team rules. Other forms can skip AI routing and go straight to fixed reps (e.g. Beau / Eric).
+          </p>
+          <div className="dist-table-wrap">
+            <table className="dist-table">
+              <thead>
+                <tr>
+                  <th>Form</th>
+                  <th>Routing</th>
+                  <th>Reps</th>
+                  <th>Wufoo webhook URL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {wufooForms.map((f) => (
+                  <tr key={f.id}>
+                    <td>
+                      <strong>{f.label || f.id}</strong>
+                      <div className="field-hint">{f.id}</div>
+                    </td>
+                    <td>{f.routing_policy === "ai" ? "AI + Team rules" : f.routing_policy === "fixed_reps" ? "Fixed reps" : f.routing_policy}</td>
+                    <td>{(f.fixed_rep_ids || []).join(", ") || "—"}</td>
+                    <td>
+                      <code style={{ fontSize: "0.75rem", wordBreak: "break-all" }}>{f.webhook_url_example}</code>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="field-hint" style={{ marginTop: "0.75rem" }}>
+            Edit <code>config/wufoo_forms.json</code> on the server to add forms, field maps, and routing policy.
+            n8n receives <code>body.form.routing_policy</code> and <code>body.form.id</code> on every assignment.
+          </p>
+        </Card>
+      )}
 
       {hubspotOwners.length > 0 && (
         <datalist id="hubspot-owners-list">

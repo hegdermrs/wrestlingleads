@@ -83,9 +83,11 @@ def build_n8n_payload(
     assignment: dict[str, Any],
     *,
     test: bool = False,
+    form_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     subject, text, html = build_assignment_email(row, rep, assignment)
-    return {
+    routing = (form_config or {}).get("routing") or {}
+    payload: dict[str, Any] = {
         "event": "lead_assignment_test" if test else "lead_assigned",
         "test": test,
         "lead": _lead_payload(row),
@@ -93,6 +95,7 @@ def build_n8n_payload(
         "assignment": {
             "route_bucket": assignment.get("route_bucket", ""),
             "route_reason": assignment.get("route_reason", ""),
+            "form_id": assignment.get("form_id") or _safe_str((form_config or {}).get("id")),
         },
         "email": {
             "subject": subject,
@@ -102,6 +105,14 @@ def build_n8n_payload(
             "format": "html",
         },
     }
+    if form_config:
+        payload["form"] = {
+            "id": _safe_str(form_config.get("id")),
+            "label": _safe_str(form_config.get("label")),
+            "routing_policy": _safe_str(routing.get("policy", "ai")),
+            "wufoo_name": _safe_str(form_config.get("wufoo_name")),
+        }
+    return payload
 
 
 def _post_to_n8n(payload: dict[str, Any]) -> dict[str, Any]:
@@ -136,8 +147,10 @@ def send_n8n_assignment_notification(
     row: pd.Series | dict[str, Any],
     rep: dict[str, Any],
     assignment: dict[str, Any],
+    *,
+    form_config: dict[str, Any] | None = None,
 ) -> bool:
-    payload = build_n8n_payload(row, rep, assignment, test=False)
+    payload = build_n8n_payload(row, rep, assignment, test=False, form_config=form_config)
     _post_to_n8n(payload)
     return True
 

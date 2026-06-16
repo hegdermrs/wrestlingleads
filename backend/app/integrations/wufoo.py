@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ..features import _safe_str
 from ..lead_form_fields import FORM_LABEL_TO_COLUMN, column_for_wufoo_title, normalize_wufoo_title
 from .wufoo_fields import merged_wufoo_field_map
 
@@ -13,14 +14,18 @@ BASE_DIR = Path(__file__).resolve().parents[3]
 WOOFOO_MAP_PATH = BASE_DIR / "config" / "wufoo_field_map.json"
 
 
-def load_wufoo_map() -> dict[str, str]:
+def load_wufoo_map(form_config: dict[str, Any] | None = None) -> dict[str, str]:
+    if form_config and form_config.get("field_map"):
+        return dict(form_config["field_map"])
     if not WOOFOO_MAP_PATH.exists():
         return {}
     data = json.loads(WOOFOO_MAP_PATH.read_text(encoding="utf-8"))
     return dict(data.get("wufoo_to_qualifier_map", {}))
 
 
-def _load_title_map() -> dict[str, str]:
+def _load_title_map(form_config: dict[str, Any] | None = None) -> dict[str, str]:
+    if form_config and form_config.get("title_map"):
+        return dict(form_config["title_map"])
     if not WOOFOO_MAP_PATH.exists():
         return {}
     data = json.loads(WOOFOO_MAP_PATH.read_text(encoding="utf-8"))
@@ -75,10 +80,12 @@ def _normalize_fields_dict(raw: dict[str, Any]) -> dict[str, Any]:
     return flat
 
 
-def _apply_label_mappings(flat: dict[str, Any], row: dict[str, Any]) -> None:
+def _apply_label_mappings(
+    flat: dict[str, Any], row: dict[str, Any], form_config: dict[str, Any] | None = None
+) -> None:
     """Fill qualifier columns from Wufoo field titles when FieldN ids are stale."""
     title_map = dict(FORM_LABEL_TO_COLUMN)
-    title_map.update(_load_title_map())
+    title_map.update(_load_title_map(form_config))
 
     for key, value in flat.items():
         if value is None or not str(value).strip():
@@ -121,9 +128,13 @@ def _apply_utm_flat_keys(flat: dict[str, Any], row: dict[str, Any]) -> None:
             row[col] = value
 
 
-def wufoo_payload_to_lead_row(payload: dict[str, Any]) -> dict[str, Any]:
+def wufoo_payload_to_lead_row(
+    payload: dict[str, Any],
+    *,
+    form_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Convert Wufoo webhook/API payload to a qualifier lead row."""
-    static_map = load_wufoo_map()
+    static_map = load_wufoo_map(form_config)
     field_map = merged_wufoo_field_map(static_map)
     flat = _normalize_fields_dict(payload)
     row: dict[str, Any] = {
@@ -131,13 +142,17 @@ def wufoo_payload_to_lead_row(payload: dict[str, Any]) -> dict[str, Any]:
         "Lifecycle Stage": "Lead",
     }
 
+    if form_config:
+        row["Wufoo Form Id"] = _safe_str(form_config.get("id"))
+        row["Wufoo Form Label"] = _safe_str(form_config.get("label"))
+
     entry_id = flat.get("EntryId") or flat.get("EntryID") or flat.get("entryId")
     if entry_id:
         row["Record ID"] = str(entry_id)
 
     _apply_field_map(flat, row, field_map)
     _apply_utm_flat_keys(flat, row)
-    _apply_label_mappings(flat, row)
+    _apply_label_mappings(flat, row, form_config)
 
     return row
 

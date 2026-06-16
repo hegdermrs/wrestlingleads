@@ -414,8 +414,15 @@ class ScoredLeadsStore:
             "on_dashboard": not _is_customer(result_row),
         }
 
-    async def append_lead(self, row: dict[str, Any], use_llm: bool = True) -> dict[str, Any]:
+    async def append_lead(
+        self,
+        row: dict[str, Any],
+        use_llm: bool = True,
+        *,
+        form_config: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Score a single lead and append to cache."""
+        from .routing import _form_auto_route
         from .scorer import score_dataframe_async
 
         df = pd.DataFrame([row])
@@ -442,9 +449,9 @@ class ScoredLeadsStore:
         from .routing_config import load_routing_config
 
         config = load_routing_config()
-        if config.get("auto_route_enabled") and result.get("email"):
+        if _form_auto_route(form_config, config) and result.get("email"):
             row_series = self._df.iloc[result["row_index"]]
-            route_result = route_and_notify(row_series, config)
+            route_result = route_and_notify(row_series, config, form_config=form_config)
             if route_result.get("assigned"):
                 self.apply_routing_result(result["email"], route_result)
             result["routing"] = route_result
