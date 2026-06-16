@@ -31,6 +31,7 @@ class RoutingRulesUpdate(BaseModel):
     sync_hubspot_on_route: bool = True
     urgent_min_score: float = 75
     jake_min_warm_score: float = 70
+    jake_max_consecutive: int = 2
     reps: list[dict[str, Any]]
 
 

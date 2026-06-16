@@ -124,7 +124,7 @@ export default function DistributionPanel({
                   <td className="dist-td-num">
                     <NumInput
                       id={`rule-${row.id}`}
-                      prefix={row.prefix ?? "≥"}
+                      prefix={row.prefix !== undefined ? row.prefix : "≥"}
                       min={row.min}
                       max={row.max}
                       value={ruleValue(row)}

@@ -17,7 +17,15 @@ from .features import (
     _normalize_hubspot_score,
     _safe_str,
     has_coaching_signals,
+    is_high_investment_level,
+    is_long_deadline,
+    is_low_investment_level,
+    is_near_term_deadline,
+    is_parent_icp_buyer,
+    is_soft_mental_edge_inquiry,
     is_sparse_subscriber,
+    is_struggling_mentally,
+    is_wrestler_self_buyer,
     qualifies_icp_priority_floor,
 )
 from .reference_scores import apply_reference_stability
@@ -62,27 +70,42 @@ def compute_rule_adjustments(row: pd.Series) -> tuple[float, list[str], list[str
 
     relationship = _safe_str(row.get("Relationship Status", ""))
     if relationship == "Ready to start now" or "ready to start" in relationship.lower():
-        score += 18
+        boost = 14 if is_parent_icp_buyer(row) else 8
+        score += boost
         reasons.append("Ready to start now")
 
-    deadline = _safe_str(row.get("Deadline for Goal", "")).lower()
-    if any(k in deadline for k in ("now", "asap", "this week", "next week", "next month")):
+    if is_near_term_deadline(row):
         score += 12
         reasons.append("Near-term deadline")
+    elif is_long_deadline(row):
+        score -= 12
+        reasons.append("Long-term goal (not urgent)")
 
     job_title = _safe_str(row.get("Job Title", ""))
-    if any(t in job_title for t in ("Parent Seeking 1-1", "Wrestler Seeking 1-1")):
-        score += 10
-        reasons.append("Core 1-on-1 coaching buyer")
-    job_function = _safe_str(row.get("Job function", ""))
-    if "Struggling mentally" in job_function or "Mental Edge" in job_function:
-        score += 10
-        reasons.append("Mental performance focus")
+    if "Parent Seeking 1-1" in job_title:
+        score += 12
+        reasons.append("Parent buyer (strong ICP fit)")
+    elif "Wrestler Seeking 1-1" in job_title:
+        score += 4
+        reasons.append("Wrestler self — lower priority than parent buyers")
 
-    investment = _safe_str(row.get("Investment Level", "")).lower()
-    if "high-performance" in investment or "recommended" in investment:
-        score += 8
+    job_function = _safe_str(row.get("Job function", ""))
+    if is_struggling_mentally(row):
+        score += 10
+        reasons.append("Mental struggle (high intent)")
+    elif is_soft_mental_edge_inquiry(row):
+        score += 3
+        reasons.append("Soft mental edge inquiry (no major issues)")
+    elif "Mental Edge" in job_function:
+        score += 6
+        reasons.append("Seeking mental edge")
+
+    if is_high_investment_level(row):
+        score += 10
         reasons.append("High-performance investment tier")
+    elif is_low_investment_level(row):
+        score -= 14
+        reasons.append("Budget / starter plan selected")
 
     if "Coach Seeking Team Mindset Training" in job_title:
         flags.append("Coach/team track — verify product fit")

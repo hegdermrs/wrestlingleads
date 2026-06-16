@@ -2,7 +2,6 @@
   "summary": "Ideal lead: a parent (or motivated wrestler) seeking 1-on-1 mental performance coaching for a middle school or high school wrestler with real tournament ambition, near-term goals, and emotional readiness to start now. Strong fit shows mental struggle (confidence, choking, anxiety in big matches), specific wrestling context, and investment in high-performance coaching — not generic interest or book-only subscribers.",
   "positive_signals": [
     "Parent Seeking 1-1 Coaching for Child",
-    "Wrestler Seeking 1-1 Coaching for Myself",
     "Struggling mentally",
     "Ready to start now",
     "Near-term deadline (this month, next month, Fargo, state, nationals)",
@@ -14,7 +13,11 @@
     "Email-only subscriber with no coaching form fields",
     "Coach seeking team-only training without 1-on-1 fit",
     "No wrestling context or vague curiosity only",
-    "HubSpot Unqualified with no coaching story"
+    "HubSpot Unqualified with no coaching story",
+    "Getting Started / budget / limited-contact plan",
+    "Wrestler self-signup with soft mental edge inquiry (no major issues)",
+    "Long-term deadline (multiple years out)",
+    "Wrestler self-signup without mental struggle, urgency, or high-performance budget"
   ],
   "reference_leads": [
     {

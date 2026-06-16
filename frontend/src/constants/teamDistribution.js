@@ -41,6 +41,23 @@ export const INBOX_RULE_ROWS = [
     max: 100,
   },
   {
+    id: "jake-warm-min",
+    label: "Jake warm-lead bar",
+    hint: "Warm leads need at least this score for Jake (Hot always qualifies)",
+    rulesKey: "jake_min_warm_score",
+    min: 0,
+    max: 100,
+  },
+  {
+    id: "jake-streak",
+    label: "Max Jake in a row",
+    hint: "Then spill to Beau/Eric — set 0 to turn off",
+    rulesKey: "jake_max_consecutive",
+    prefix: "",
+    min: 0,
+    max: 10,
+  },
+  {
     id: "coaching-boost",
     label: "Full coaching form bonus",
     hint: "Points added to fit score",

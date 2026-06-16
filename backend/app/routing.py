@@ -7,10 +7,19 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 
-from .features import URGENT_DEADLINE_KEYWORDS, _safe_str, has_coaching_signals, is_sparse_subscriber
+from .features import (
+    URGENT_DEADLINE_KEYWORDS,
+    _safe_str,
+    has_coaching_signals,
+    is_high_investment_level,
+    is_near_term_deadline,
+    is_parent_icp_buyer,
+    is_sparse_subscriber,
+    is_struggling_mentally,
+)
 from .routing_config import get_rep_by_id, load_routing_config, reps_for_bucket
 from .scoring_config import get_tier_thresholds
-from .routing_log import append_routing_entry, count_rep_this_week, was_lead_routed
+from .routing_log import append_routing_entry, consecutive_routes_to_rep, count_rep_this_week, was_lead_routed
 from .routing_notify import send_lead_assignment_email, email_configured
 from .integrations.hubspot import hubspot_configured, sync_contact_on_route
 from .n8n_notify import n8n_configured, send_n8n_assignment_notification
@@ -78,15 +87,32 @@ def is_west_coast(row: pd.Series | dict[str, Any]) -> bool:
     return any(hint in region for hint in WEST_COAST_NAME_HINTS)
 
 
+def _gene_urgency_signals(row: pd.Series | dict[str, Any]) -> bool:
+    """Gene urgent queue: parent buyers, real urgency, or serious mental struggle — not budget self-signups."""
+    if is_parent_icp_buyer(row):
+        return True
+    if is_near_term_deadline(row):
+        return True
+    if is_high_investment_level(row):
+        return True
+    if is_struggling_mentally(row):
+        return True
+    return False
+
+
 def is_urgent_red_hot(row: pd.Series | dict[str, Any], config: dict[str, Any]) -> bool:
-    """Gene bucket: Priority (Hot) tier, at/above urgent floor, and ready soon."""
+    """Gene bucket: Hot tier, high score, ready soon, and real urgency signals."""
     tier = _tier(row)
     score = _score(row)
     if tier != "Hot":
         return False
     hot_floor = float(get_tier_thresholds()["Hot"])
     min_score = float(config.get("urgent_min_score", hot_floor))
-    return score >= min_score and _is_ready_now(row)
+    if score < min_score:
+        return False
+    if not _is_ready_now(row):
+        return False
+    return _gene_urgency_signals(row)
 
 
 def is_jake_tier(row: pd.Series | dict[str, Any], config: dict[str, Any]) -> bool:
@@ -279,6 +305,32 @@ def _first_rep_with_cap(
     return None
 
 
+def _try_pick_jake(
+    row: pd.Series | dict[str, Any],
+    config: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str]:
+    """Jake only when lead meets tier bar, weekly cap, and consecutive-route limit."""
+    if not is_jake_tier(row, config):
+        min_warm = float(config.get("jake_min_warm_score", 70))
+        tier = _tier(row)
+        if tier == "Warm":
+            return None, f"Warm lead below Jake bar (≥{min_warm:.0f})"
+        return None, "Jake gets Hot or strong Warm only"
+
+    jake_reps = reps_for_bucket(config, "hot_warm")
+    jake = _first_rep_with_cap(jake_reps)
+    if not jake:
+        return None, "Jake at weekly cap"
+
+    max_consec = int(config.get("jake_max_consecutive", 2))
+    if max_consec > 0:
+        streak = consecutive_routes_to_rep(_safe_str(jake.get("id")))
+        if streak >= max_consec:
+            return None, f"Jake limit ({max_consec} in a row) — general pool"
+
+    return jake, ""
+
+
 def _pick_general_rep(row: pd.Series | dict[str, Any], config: dict[str, Any]) -> tuple[dict[str, Any], str]:
     general = reps_for_bucket(config, "general")
     if not general:
@@ -349,6 +401,27 @@ def _assign_rep_percentile(
                 "route_reason": reason,
                 "distribution_band": band,
             }
+        if rep_key == "jake":
+            jake_rep, spill = _try_pick_jake(row, config)
+            if jake_rep:
+                return {
+                    "assigned": True,
+                    "rep": jake_rep,
+                    "route_bucket": route_bucket,
+                    "route_reason": _assigned_reason(jake_rep),
+                    "distribution_band": band,
+                }
+            if spill and band == "jake":
+                rep, _ = _pick_general_rep(row, config)
+                return {
+                    "assigned": True,
+                    "rep": rep,
+                    "route_bucket": "general",
+                    "route_reason": _assigned_reason(rep, spill),
+                    "distribution_band": band,
+                }
+            continue
+
         reps = reps_for_bucket(config, bucket_key[rep_key])
         rep = _first_rep_with_cap(reps)
         if rep:
@@ -423,17 +496,18 @@ def _assign_rep_tier(
                 }
         # Fall through if Gene at cap
 
-    if is_jake_tier(row, config):
-        for rep in reps_for_bucket(config, "hot_warm"):
-            if _rep_under_cap(rep):
-                return {
-                    "assigned": True,
-                    "rep": rep,
-                    "route_bucket": "hot_warm",
-                    "route_reason": _assigned_reason(rep),
-                }
+    jake_rep, spill = _try_pick_jake(row, config)
+    if jake_rep:
+        return {
+            "assigned": True,
+            "rep": jake_rep,
+            "route_bucket": "hot_warm",
+            "route_reason": _assigned_reason(jake_rep),
+        }
 
     rep, reason = _pick_general_rep(row, config)
+    if spill:
+        reason = _assigned_reason(rep, spill)
     return {
         "assigned": True,
         "rep": rep,

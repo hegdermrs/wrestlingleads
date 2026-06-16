@@ -36,6 +36,15 @@ MENTAL_STRUGGLE_JOB_FUNCTIONS = (
     "Mental Edge",
 )
 
+LOW_INVESTMENT_MARKERS = (
+    "getting started",
+    "lower-cost",
+    "limited-contact",
+    "foundational",
+    "limited contact",
+    "lower cost",
+)
+
 
 def _safe_str(value: object) -> str:
     if value is None or (isinstance(value, float) and pd.isna(value)):
@@ -131,13 +140,75 @@ def is_incomplete_profile(row: pd.Series | dict) -> bool:
     return not has_coaching_signals(row) and not has_name(row)
 
 
+def is_near_term_deadline(row: pd.Series | dict) -> bool:
+    get = row.get if isinstance(row, dict) else row.get
+    deadline = _safe_str(get("Deadline for Goal", "")).lower()
+    return any(keyword in deadline for keyword in URGENT_DEADLINE_KEYWORDS)
+
+
+def is_long_deadline(row: pd.Series | dict) -> bool:
+    """Multi-year or vague far-future goals — not urgent."""
+    get = row.get if isinstance(row, dict) else row.get
+    deadline = _safe_str(get("Deadline for Goal", "")).lower()
+    if not deadline:
+        return False
+    if is_near_term_deadline(row):
+        return False
+    if re.search(r"\b\d+\s*\+?\s*year", deadline):
+        return True
+    if " years" in deadline or deadline in ("year", "years"):
+        return True
+    return False
+
+
+def is_low_investment_level(row: pd.Series | dict) -> bool:
+    get = row.get if isinstance(row, dict) else row.get
+    investment = _safe_str(get("Investment Level", "")).lower()
+    return any(marker in investment for marker in LOW_INVESTMENT_MARKERS)
+
+
+def is_high_investment_level(row: pd.Series | dict) -> bool:
+    get = row.get if isinstance(row, dict) else row.get
+    investment = _safe_str(get("Investment Level", "")).lower()
+    if is_low_investment_level(row):
+        return False
+    return "high-performance" in investment or (
+        "recommended" in investment and "getting started" not in investment
+    )
+
+
+def is_parent_icp_buyer(row: pd.Series | dict) -> bool:
+    get = row.get if isinstance(row, dict) else row.get
+    return "Parent Seeking 1-1" in _safe_str(get("Job Title", ""))
+
+
+def is_wrestler_self_buyer(row: pd.Series | dict) -> bool:
+    get = row.get if isinstance(row, dict) else row.get
+    return "Wrestler Seeking 1-1" in _safe_str(get("Job Title", ""))
+
+
+def is_struggling_mentally(row: pd.Series | dict) -> bool:
+    get = row.get if isinstance(row, dict) else row.get
+    return "Struggling mentally" in _safe_str(get("Job function", ""))
+
+
+def is_soft_mental_edge_inquiry(row: pd.Series | dict) -> bool:
+    get = row.get if isinstance(row, dict) else row.get
+    inquiry = _safe_str(get("Job function", "")).lower()
+    if "mental edge" not in inquiry:
+        return False
+    return any(
+        phrase in inquiry
+        for phrase in ("no major", "no issue", "no major issue", "no major issues")
+    )
+
+
 def is_ready_for_coaching(row: pd.Series | dict) -> bool:
     get = row.get if isinstance(row, dict) else row.get
     relationship = _safe_str(get("Relationship Status", "")).lower()
     if "ready to start" in relationship:
         return True
-    deadline = _safe_str(get("Deadline for Goal", "")).lower()
-    return any(keyword in deadline for keyword in URGENT_DEADLINE_KEYWORDS)
+    return is_near_term_deadline(row)
 
 
 def is_core_icp_buyer(row: pd.Series | dict) -> bool:
@@ -159,18 +230,32 @@ def qualifies_icp_priority_floor(row: pd.Series | dict, llm_score: float) -> boo
         return False
     if not has_coaching_signals(row):
         return False
-    if not is_core_icp_buyer(row):
-        return False
     if not is_ready_for_coaching(row):
+        return False
+    if is_low_investment_level(row):
+        return False
+    if is_long_deadline(row):
         return False
 
     get = row.get if isinstance(row, dict) else row.get
-    job_title = _safe_str(get("Job Title", ""))
-    if "Coach Seeking Team Mindset Training" in job_title:
+    if "Coach Seeking Team Mindset Training" in _safe_str(get("Job Title", "")):
         return False
     if _safe_str(get("Lead Status", "")) == "Unqualified":
         return False
-    return True
+
+    if is_parent_icp_buyer(row):
+        if is_soft_mental_edge_inquiry(row) and not is_struggling_mentally(row):
+            return False
+        return True
+
+    if is_wrestler_self_buyer(row):
+        return (
+            is_struggling_mentally(row)
+            and is_near_term_deadline(row)
+            and is_high_investment_level(row)
+        )
+
+    return is_struggling_mentally(row) and is_near_term_deadline(row)
 
 
 def empty_profile_text_result() -> dict[str, Any]:
@@ -235,8 +320,11 @@ def heuristic_text_score(row: pd.Series) -> tuple[float, list[str], list[str]]:
 
     job_title = _safe_str(row.get("Job Title", ""))
     if "Parent Seeking" in job_title:
-        score += 8
+        score += 10
         reasons.append("Parent buyer (strong fit historically)")
+    elif "Wrestler Seeking" in job_title:
+        score += 2
+        reasons.append("Wrestler self-signup (weaker ICP than parent)")
     elif "Coach Seeking" in job_title:
         score += 3
         reasons.append("Coach buyer (different product track)")
@@ -245,9 +333,23 @@ def heuristic_text_score(row: pd.Series) -> tuple[float, list[str], list[str]]:
     if "Struggling mentally" in job_function:
         score += 10
         reasons.append("Explicit mental struggle")
+    elif is_soft_mental_edge_inquiry(row):
+        score += 2
+        reasons.append("Soft mental edge inquiry")
     elif "Mental Edge" in job_function:
-        score += 6
+        score += 5
         reasons.append("Seeking mental edge")
+
+    if is_low_investment_level(row):
+        score -= 12
+        red_flags.append("Starter / budget plan selected")
+    elif is_high_investment_level(row):
+        score += 6
+        reasons.append("High-performance investment tier")
+
+    if is_long_deadline(row):
+        score -= 8
+        red_flags.append("Long-term deadline — not urgent")
 
     if not text.strip():
         score = 15.0

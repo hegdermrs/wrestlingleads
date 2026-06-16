@@ -34,6 +34,7 @@ def default_rules() -> dict[str, Any]:
         "send_email_on_route": True,
         "urgent_min_score": 75,
         "jake_min_warm_score": 70,
+        "jake_max_consecutive": 2,
         "reps": [],
     }
 

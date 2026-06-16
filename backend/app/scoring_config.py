@@ -12,8 +12,8 @@ DEFAULT_RUBRIC_PATH = BASE_DIR / "config" / "scoring_rubric.json"
 SCORING_CONFIG_PATH = DATA_DIR / "scoring_config.json"
 
 LENIENCY_DEFAULTS = {
-    "coaching_score_boost": 8.0,
-    "icp_llm_min": 68.0,
+    "coaching_score_boost": 5.0,
+    "icp_llm_min": 72.0,
 }
 
 

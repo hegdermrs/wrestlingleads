@@ -33,6 +33,20 @@ def _save_log(entries: list[dict[str, Any]]) -> None:
     )
 
 
+def consecutive_routes_to_rep(rep_id: str) -> int:
+    """How many of the most recent assignments went to this rep (0 if last route was someone else)."""
+    rid = rep_id.strip()
+    if not rid:
+        return 0
+    streak = 0
+    for entry in reversed(_load_log()):
+        if str(entry.get("rep_id", "")).strip() == rid:
+            streak += 1
+        else:
+            break
+    return streak
+
+
 def count_rep_this_week(rep_id: str) -> int:
     week = _week_start()
     count = 0
