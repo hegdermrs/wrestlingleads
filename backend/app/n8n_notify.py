@@ -11,6 +11,7 @@ import pandas as pd
 from .features import _safe_str
 from .integrations.hubspot import hubspot_owner_id_for_rep, hubspot_owner_resolve_note
 from .lead_form_fields import form_entries_for_row, resolve_form_config_for_row
+from .phone_utils import format_us_display, format_us_e164, rep_first_name
 from .routing_notify import build_assignment_email
 
 
@@ -35,13 +36,16 @@ def _lead_payload(
     first = _safe_str(get("First Name", ""))
     last = _safe_str(get("Last Name", ""))
     resolved = resolve_form_config_for_row(row, form_config)
+    raw_phone = _safe_str(get("Phone Number", ""))
     return {
         "record_id": _safe_str(get("Record ID", "")),
         "first_name": first,
         "last_name": last,
         "name": f"{first} {last}".strip() or _safe_str(get("Email", "")),
         "email": _safe_str(get("Email", "")),
-        "phone": _safe_str(get("Phone Number", "")),
+        "phone": raw_phone,
+        "phone_display": format_us_display(raw_phone),
+        "phone_e164": format_us_e164(raw_phone),
         "state": _safe_str(get("State/Region", "")),
         "message": _safe_str(get("Message", "")),
         "job_title": _safe_str(get("Job Title", "")),
@@ -67,11 +71,17 @@ def _lead_payload(
 
 
 def _rep_payload_for_n8n(rep: dict[str, Any]) -> dict[str, Any]:
-    """Rep block for n8n — always includes hubspot_owner_id (number or null) for HubSpot nodes."""
+    """Rep block for n8n — owner id, SMS phone, and display name for lead texts."""
+    raw_phone = _safe_str(rep.get("phone", ""))
+    full_name = _safe_str(rep.get("name", ""))
     payload: dict[str, Any] = {
         "id": _safe_str(rep.get("id", "")),
-        "name": _safe_str(rep.get("name", "")),
+        "name": full_name,
+        "first_name": rep_first_name(full_name),
         "email": _safe_str(rep.get("email", "")),
+        "phone": raw_phone,
+        "phone_display": format_us_display(raw_phone),
+        "phone_e164": format_us_e164(raw_phone),
         "bucket": _safe_str(rep.get("bucket", "")),
         "hubspot_owner_id": None,
         "has_hubspot_owner_id": False,
@@ -82,6 +92,38 @@ def _rep_payload_for_n8n(rep: dict[str, Any]) -> dict[str, Any]:
         payload["has_hubspot_owner_id"] = True
     payload["hubspot_owner_note"] = hubspot_owner_resolve_note(rep)
     return payload
+
+
+def _sms_payload(lead: dict[str, Any], rep: dict[str, Any]) -> dict[str, Any]:
+    lead_name = _safe_str(lead.get("first_name")) or "there"
+    lead_phone = _safe_str(lead.get("phone_display")) or _safe_str(lead.get("phone"))
+    rep_first = _safe_str(rep.get("first_name")) or "Your coach"
+    rep_phone = _safe_str(rep.get("phone_display")) or _safe_str(rep.get("phone"))
+
+    rep_lines = [
+        "New lead assigned!",
+        f"Name: {_safe_str(lead.get('name')) or lead_name}",
+        f"Email: {_safe_str(lead.get('email'))}",
+    ]
+    if lead_phone:
+        rep_lines.append(f"Phone: {lead_phone}")
+    rep_lines.append("Please follow up ASAP.")
+
+    lead_lines = [
+        f"Hi {lead_name}, we received your form.",
+    ]
+    if rep_phone:
+        lead_lines.append(f"{rep_first} will call you from {rep_phone}.")
+    else:
+        lead_lines.append(f"{rep_first} will contact you soon.")
+    lead_lines.append("- Wrestling Mindset")
+
+    return {
+        "rep_message": "\n".join(rep_lines),
+        "lead_message": "\n".join(lead_lines),
+        "rep_to": _safe_str(rep.get("phone_e164")),
+        "lead_to": _safe_str(lead.get("phone_e164")),
+    }
 
 
 def build_n8n_payload(
@@ -97,11 +139,14 @@ def build_n8n_payload(
         row, rep, assignment, form_config=resolved_form
     )
     routing = (resolved_form or form_config or {}).get("routing") or {}
+    lead_block = _lead_payload(row, form_config=resolved_form)
+    rep_block = _rep_payload_for_n8n(rep)
     payload: dict[str, Any] = {
         "event": "lead_assignment_test" if test else "lead_assigned",
         "test": test,
-        "lead": _lead_payload(row, form_config=resolved_form),
-        "rep": _rep_payload_for_n8n(rep),
+        "lead": lead_block,
+        "rep": rep_block,
+        "sms": _sms_payload(lead_block, rep_block),
         "assignment": {
             "route_bucket": assignment.get("route_bucket", ""),
             "route_reason": assignment.get("route_reason", ""),

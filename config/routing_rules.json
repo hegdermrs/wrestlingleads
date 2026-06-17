@@ -17,6 +17,7 @@
       "id": "gene",
       "name": "Gene Zannetti",
       "email": "genezannetti@gmail.com",
+      "phone": "9083376143",
       "bucket": "urgent",
       "hubspot_owner_id": "41425405",
       "weekly_cap": null
@@ -25,6 +26,7 @@
       "id": "jake",
       "name": "Jake Hunter",
       "email": "jthunter600@gmail.com",
+      "phone": "2673617237",
       "bucket": "hot_warm",
       "hubspot_owner_id": "41425418",
       "weekly_cap": null
@@ -33,6 +35,7 @@
       "id": "beau",
       "name": "Beau Tillman",
       "email": "beautillman80@gmail.com",
+      "phone": "6203520665",
       "bucket": "general",
       "hubspot_owner_id": "41425416",
       "weekly_cap": null
@@ -41,6 +44,7 @@
       "id": "eric",
       "name": "Eric Spencer",
       "email": "evspencer@gmail.com",
+      "phone": "8014005932",
       "bucket": "general",
       "hubspot_owner_id": "207311194",
       "weekly_cap": null

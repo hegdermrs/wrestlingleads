@@ -272,6 +272,19 @@ export default function Rules() {
 
                   {rep.bucket !== "automation" && (
                   <label className="field-label">
+                    Mobile (SMS / caller ID)
+                    <input
+                      className="input"
+                      type="tel"
+                      value={rep.phone || ""}
+                      onChange={(e) => updateRep(index, "phone", e.target.value)}
+                      placeholder="9083376143"
+                    />
+                  </label>
+                  )}
+
+                  {rep.bucket !== "automation" && (
+                  <label className="field-label">
                     HubSpot owner ID
                     <input
                       className="input"
