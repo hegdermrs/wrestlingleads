@@ -582,7 +582,7 @@ def route_and_notify(
     )
     send_n8n = _form_send_to_n8n(form_config)
 
-    if config.get("send_email_on_route", True) and not skip_notify:
+    if not skip_notify:
         if n8n_configured() and send_n8n:
             try:
                 n8n_sent = send_n8n_assignment_notification(
@@ -590,17 +590,20 @@ def route_and_notify(
                 )
             except Exception as exc:
                 n8n_error = str(exc)
-        elif n8n_configured() and not send_n8n:
+        elif not send_n8n:
             n8n_error = "Skipped n8n for this form (send_to_n8n=false)"
 
-        if email_configured():
-            try:
-                email_sent = send_lead_assignment_email(
-                    row, rep, assignment, form_config=form_config
-                )
-            except Exception as exc:
-                notify_error = str(exc)
-        elif not n8n_configured():
+        if config.get("send_email_on_route", True):
+            if email_configured():
+                try:
+                    email_sent = send_lead_assignment_email(
+                        row, rep, assignment, form_config=form_config
+                    )
+                except Exception as exc:
+                    notify_error = str(exc)
+            elif not n8n_configured():
+                notify_error = "No notifications configured. Set N8N_WEBHOOK_URL or email on Railway."
+        elif not n8n_configured() and not email_configured():
             notify_error = "No notifications configured. Set N8N_WEBHOOK_URL or email on Railway."
 
     append_routing_entry(
