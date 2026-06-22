@@ -340,7 +340,7 @@ def _pick_general_rep(row: pd.Series | dict[str, Any], config: dict[str, Any]) -
     eric = next((r for r in general if _safe_str(r.get("id")) == WEST_COAST_REP_ID), None)
     beau = next((r for r in general if _safe_str(r.get("id")) != WEST_COAST_REP_ID), None)
 
-    if west and eric:
+    if west and eric and _rep_under_cap(eric):
         return eric, _assigned_reason(eric, "West Coast")
 
     candidates = [r for r in general if r]
@@ -349,7 +349,7 @@ def _pick_general_rep(row: pd.Series | dict[str, Any], config: dict[str, Any]) -
 
     counts = {r["id"]: count_rep_this_week(_safe_str(r.get("id"))) for r in candidates}
     chosen = min(candidates, key=lambda r: counts.get(r["id"], 0))
-    if west and eric and chosen.get("id") != eric.get("id"):
+    if west and eric and _rep_under_cap(eric) and chosen.get("id") != eric.get("id"):
         return eric, _assigned_reason(eric, "West Coast")
     return chosen, _assigned_reason(chosen)
 
