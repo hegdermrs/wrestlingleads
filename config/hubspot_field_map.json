@@ -48,6 +48,81 @@
       "label": "LW Assigned At",
       "type": "string",
       "description": "UTC timestamp when LeadsWrestling assigned the lead"
+    },
+    "lw_lead_status": {
+      "label": "LW Lead Status",
+      "type": "string",
+      "description": "Lead status from LeadsWrestling (e.g., 'New Lead')"
+    },
+    "lw_source": {
+      "label": "LW Source",
+      "type": "string",
+      "description": "Source of lead (e.g., '1-1 wufoo wrestling')"
+    },
+    "lw_sport": {
+      "label": "LW Sport",
+      "type": "string",
+      "description": "Sport type (e.g., '1-1 wrestling')"
+    },
+    "lw_investment_level": {
+      "label": "LW Investment Level",
+      "type": "string",
+      "description": "Investment level preference from lead qualification"
+    },
+    "lw_relationship_status": {
+      "label": "LW Relationship Status",
+      "type": "string",
+      "description": "How willing the wrestler is to start mindset training"
+    },
+    "lw_job_function": {
+      "label": "LW Job Function",
+      "type": "string",
+      "description": "Reason for inquiry from lead"
+    },
+    "lw_membership_notes": {
+      "label": "LW Membership Notes",
+      "type": "string",
+      "description": "Where lead heard about Wrestling Mindset"
+    },
+    "lw_club_team_promo_code": {
+      "label": "LW Club/Team Promo Code",
+      "type": "string",
+      "description": "Club or team promo code provided by lead"
+    },
+    "lw_years_experience": {
+      "label": "LW Years Experience",
+      "type": "string",
+      "description": "Years of wrestling experience"
+    },
+    "lw_deadline_for_goal": {
+      "label": "LW Deadline for Goal",
+      "type": "string",
+      "description": "Deadline for achieving wrestling goal"
+    },
+    "lw_utm_source": {
+      "label": "LW UTM Source",
+      "type": "string",
+      "description": "UTM Source parameter for tracking"
+    },
+    "lw_utm_medium": {
+      "label": "LW UTM Medium",
+      "type": "string",
+      "description": "UTM Medium parameter for tracking"
+    },
+    "lw_utm_campaign": {
+      "label": "LW UTM Campaign",
+      "type": "string",
+      "description": "UTM Campaign parameter for tracking"
+    },
+    "lw_utm_term": {
+      "label": "LW UTM Term",
+      "type": "string",
+      "description": "UTM Term parameter for tracking"
+    },
+    "lw_utm_content": {
+      "label": "LW UTM Content",
+      "type": "string",
+      "description": "UTM Content parameter for tracking"
     }
   },
   "source_to_hubspot_field_map": {
@@ -64,6 +139,21 @@
     "Message": "message",
     "Job Title": "jobtitle",
     "Lifecycle Stage": "lifecyclestage",
-    "Lead Status": "hs_lead_status"
+    "Lead Status": "hs_lead_status",
+    "State/Region": "state",
+    "Investment Level": "lw_investment_level",
+    "Job function": "lw_job_function",
+    "Relationship Status": "lw_relationship_status",
+    "Membership Notes": "lw_membership_notes",
+    "Years experience": "lw_years_experience",
+    "Deadline for Goal": "lw_deadline_for_goal",
+    "Wrestler's Goal": "wrestler_goal",
+    "Wrestler's Grade": "wrestler_grade",
+    "Club/Team Promo Code": "lw_club_team_promo_code",
+    "UTM Source": "lw_utm_source",
+    "UTM Medium": "lw_utm_medium",
+    "UTM Campaign": "lw_utm_campaign",
+    "UTM Term": "lw_utm_term",
+    "UTM Content": "lw_utm_content"
   }
 }

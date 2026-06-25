@@ -51,6 +51,7 @@ def _lead_payload(
         "job_title": _safe_str(get("Job Title", "")),
         "job_function": _safe_str(get("Job function", "")),
         "relationship_status": _safe_str(get("Relationship Status", "")),
+        "membership_notes": _safe_str(get("Membership Notes", "")),
         "wrestler_goal": _safe_str(get("Wrestler's Goal", "")),
         "wrestler_grade": _safe_str(get("Wrestler's Grade", "")),
         "years_experience": _safe_str(get("Years experience", "")),
@@ -64,6 +65,8 @@ def _lead_payload(
         "utm_source": _safe_str(get("UTM Source", "")),
         "utm_medium": _safe_str(get("UTM Medium", "")),
         "utm_campaign": _safe_str(get("UTM Campaign", "")),
+        "utm_term": _safe_str(get("UTM Term", "")),
+        "utm_content": _safe_str(get("UTM Content", "")),
         "form": {
             label: val for label, val in form_entries_for_row(row, form_config=resolved)
         },
