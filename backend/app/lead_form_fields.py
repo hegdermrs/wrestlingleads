@@ -9,9 +9,11 @@ import pandas as pd
 
 # (column name in lead row, label shown to reps in email / UI)
 LEAD_FORM_FIELDS: list[tuple[str, str]] = [
+    ("First Name", "First Name"),
+    ("Last Name", "Last Name"),
     ("Email", "Email"),
-    ("Job Title", "Which best describes you"),
     ("Phone Number", "Cell Phone Number (Parent)"),
+    ("Job Title", "Which best describes you"),
     ("State/Region", "State"),
     ("Wrestler's Grade", "Wrestler's Grade"),
     ("Years experience", "Years of Experience"),
@@ -19,7 +21,7 @@ LEAD_FORM_FIELDS: list[tuple[str, str]] = [
     ("Deadline for Goal", "Is there a deadline for this goal?"),
     ("Job function", "Reason for Inquiry"),
     ("Relationship Status", "How willing is your wrestler to start mindset training?"),
-    ("Source", "Where did you hear about Wrestling Mindset?"),
+    ("Membership Notes", "Where did you hear about Wrestling Mindset?"),
     ("Investment Level", "Preferred investment level"),
     ("Club/Team Promo Code", "Club/Team Promo Code"),
     ("Message", "Additional wrestling information"),
@@ -50,8 +52,8 @@ WUFOO_TITLE_ALIASES: dict[str, str] = {
     "Reason for Inquiry (choose one)": "Job function",
     "How willing to start mindset training": "Relationship Status",
     "How willing is your wrestler to start mindset training?": "Relationship Status",
-    "Where did you hear about Wrestling Mindset": "Source",
-    "Where did you hear about Winning Mindset?": "Source",
+    "Where did you hear about Wrestling Mindset": "Membership Notes",
+    "Where did you hear about Winning Mindset?": "Membership Notes",
     "Primary sport involved with...": "Sport",
     "Select a Choice": "Customer Type",
     "Info about your Team(s) or Athlete (i.e. location, size, competitive level, struggles, other teams your work with, etc.)": "Message",

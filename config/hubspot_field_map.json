@@ -123,6 +123,11 @@
       "label": "LW UTM Content",
       "type": "string",
       "description": "UTM Content parameter for tracking"
+    },
+    "lw_utm_keyword": {
+      "label": "LW UTM Keyword",
+      "type": "string",
+      "description": "UTM Keyword parameter for tracking"
     }
   },
   "source_to_hubspot_field_map": {
@@ -154,6 +159,7 @@
     "UTM Medium": "lw_utm_medium",
     "UTM Campaign": "lw_utm_campaign",
     "UTM Term": "lw_utm_term",
-    "UTM Content": "lw_utm_content"
+    "UTM Content": "lw_utm_content",
+    "UTM Keyword": "lw_utm_keyword"
   }
 }

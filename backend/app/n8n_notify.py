@@ -67,6 +67,7 @@ def _lead_payload(
         "utm_campaign": _safe_str(get("UTM Campaign", "")),
         "utm_term": _safe_str(get("UTM Term", "")),
         "utm_content": _safe_str(get("UTM Content", "")),
+        "utm_keyword": _safe_str(get("UTM Keyword", "")),
         "form": {
             label: val for label, val in form_entries_for_row(row, form_config=resolved)
         },
