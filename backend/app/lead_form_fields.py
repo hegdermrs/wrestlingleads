@@ -7,6 +7,8 @@ from typing import Any
 
 import pandas as pd
 
+from .phone_utils import format_us_display
+
 # (column name in lead row, label shown to reps in email / UI)
 LEAD_FORM_FIELDS: list[tuple[str, str]] = [
     ("First Name", "First Name"),
@@ -183,6 +185,8 @@ def form_entries_for_row(
 
     for key, label in fields:
         val = _safe_str(get(key, ""))
+        if key == "Phone Number" and val:
+            val = format_us_display(val)
         if val or include_empty:
             out.append((label, val))
     return out
