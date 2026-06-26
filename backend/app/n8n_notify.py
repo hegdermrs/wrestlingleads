@@ -51,7 +51,6 @@ def _lead_payload(
         "job_title": _safe_str(get("Job Title", "")),
         "job_function": _safe_str(get("Job function", "")),
         "relationship_status": _safe_str(get("Relationship Status", "")),
-        "membership_notes": _safe_str(get("Membership Notes", "")),
         "wrestler_goal": _safe_str(get("Wrestler's Goal", "")),
         "wrestler_grade": _safe_str(get("Wrestler's Grade", "")),
         "years_experience": _safe_str(get("Years experience", "")),

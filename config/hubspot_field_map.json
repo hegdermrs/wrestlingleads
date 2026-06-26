@@ -79,11 +79,6 @@
       "type": "string",
       "description": "Reason for inquiry from lead"
     },
-    "lw_membership_notes": {
-      "label": "LW Membership Notes",
-      "type": "string",
-      "description": "Where lead heard about Wrestling Mindset"
-    },
     "lw_club_team_promo_code": {
       "label": "LW Club/Team Promo Code",
       "type": "string",
@@ -149,7 +144,6 @@
     "Investment Level": "lw_investment_level",
     "Job function": "lw_job_function",
     "Relationship Status": "lw_relationship_status",
-    "Membership Notes": "lw_membership_notes",
     "Years experience": "lw_years_experience",
     "Deadline for Goal": "lw_deadline_for_goal",
     "Wrestler's Goal": "wrestler_goal",
