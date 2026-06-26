@@ -29,7 +29,7 @@
         "Field335": "Deadline for Goal",
         "Field326": "Job function",
         "Field340": "Relationship Status",
-        "Field117": "Source",
+        "Field117": "Membership Notes",
         "Field445": "Investment Level",
         "Field447": "Club/Team Promo Code",
         "Field113": "Message",
@@ -148,7 +148,7 @@
         "Field443": "Job Title",
         "Field10": "Phone Number",
         "Field333": "State/Region",
-        "Field117": "Source",
+        "Field117": "Membership Notes",
         "Field113": "Message"
       },
       "title_map": {
