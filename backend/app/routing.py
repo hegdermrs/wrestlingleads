@@ -78,13 +78,33 @@ def _normalize_state(value: object) -> str:
     return text[:2] if len(text) >= 2 else text
 
 
+def _normalize_city_state_country(value: object) -> str:
+    """Extract state/region from a City, State, Country string."""
+    text = _safe_str(value)
+    if not text:
+        return ""
+    parts = [p.strip() for p in text.split(",")]
+    if len(parts) >= 2:
+        for part in parts[1:]:
+            part_upper = part.strip().upper()
+            if len(part_upper) == 2 and part_upper.isalpha():
+                return part_upper
+    return ""
+
+
 def is_west_coast(row: pd.Series | dict[str, Any]) -> bool:
     get = row.get if isinstance(row, dict) else row.get
     state = _normalize_state(get("State/Region", ""))
     if state in WEST_COAST_STATE_CODES:
         return True
     region = _safe_str(get("State/Region", "")).lower()
-    return any(hint in region for hint in WEST_COAST_NAME_HINTS)
+    if any(hint in region for hint in WEST_COAST_NAME_HINTS):
+        return True
+    csc = _normalize_city_state_country(get("City/State/Country", ""))
+    if csc in WEST_COAST_STATE_CODES:
+        return True
+    csc_full = _safe_str(get("City/State/Country", "")).lower()
+    return any(hint in csc_full for hint in WEST_COAST_NAME_HINTS)
 
 
 def _gene_urgency_signals(row: pd.Series | dict[str, Any]) -> bool:
@@ -164,9 +184,17 @@ def should_route_lead_for_form(
 def _pick_fixed_rep(
     config: dict[str, Any],
     form_config: dict[str, Any],
+    row: pd.Series | dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     routing = form_config.get("routing") or {}
-    rep_ids = list(routing.get("fixed_rep_ids") or routing.get("rep_ids") or [])
+    region_map = routing.get("region_routing")
+
+    if region_map and row is not None:
+        region_id = "west" if is_west_coast(row) else "east"
+        rep_ids = list(region_map.get(region_id) or region_map.get("east") or [])
+    else:
+        rep_ids = list(routing.get("fixed_rep_ids") or routing.get("rep_ids") or [])
+
     if not rep_ids:
         return None
 
@@ -196,18 +224,23 @@ def _assign_fixed_reps(
     config: dict[str, Any],
     form_config: dict[str, Any],
 ) -> dict[str, Any]:
-    rep = _pick_fixed_rep(config, form_config)
+    rep = _pick_fixed_rep(config, form_config, row=row)
     if not rep:
         return {
             "assigned": False,
             "skipped_reason": "Fixed-rep form has no matching reps on Team",
         }
     label = _safe_str(form_config.get("label")) or _safe_str(form_config.get("id"))
+    region_map = (form_config.get("routing") or {}).get("region_routing")
+    note = f"Form: {label}"
+    if region_map:
+        region_label = "West Coast" if is_west_coast(row) else "East Coast"
+        note = f"Form: {label} ({region_label})"
     return {
         "assigned": True,
         "rep": rep,
         "route_bucket": "form_fixed",
-        "route_reason": _assigned_reason(rep, f"Form: {label}"),
+        "route_reason": _assigned_reason(rep, note),
         "distribution_band": "form_fixed",
         "form_id": _safe_str(form_config.get("id")),
     }

@@ -168,6 +168,64 @@
         ["Source", "Where did you hear about Wrestling Mindset?"],
         ["Message", "Additional wrestler information"]
       ]
+    },
+    {
+      "id": "form-4",
+      "label": "Team Training Application",
+      "wufoo_name": "team-training-application",
+      "wufoo_hash": "z1jnzbok0yuflbm",
+      "webhook_query_form": "form-4",
+      "routing": {
+        "policy": "fixed_reps",
+        "region_routing": {
+          "east": ["jake"],
+          "west": ["eric", "beau"]
+        },
+        "fixed_rep_pick": "round_robin",
+        "score_with_ai": false,
+        "auto_route": true,
+        "send_to_n8n": true,
+        "require_coaching_signals": false
+      },
+      "field_map": {
+        "Field1": "First Name",
+        "Field2": "Last Name",
+        "Field236": "Job Title",
+        "Field119": "Age Level Coached",
+        "Field9": "Email",
+        "Field10": "Phone Number",
+        "Field121": "School/Team Name",
+        "Field129": "City/State/Country",
+        "Field117": "Source",
+        "Field131": "Team Struggle",
+        "Field133": "Program Goal",
+        "Field113": "Message"
+      },
+      "title_map": {
+        "Which best describes you...": "Job Title",
+        "What age level do you coach (HS, college, youth, RTC, etc.)": "Age Level Coached",
+        "Cell Phone Number": "Phone Number",
+        "School or Team Name": "School/Team Name",
+        "City, State, Country": "City/State/Country",
+        "Where did you hear about Wrestling Mindset?": "Source",
+        "What is the main struggle of your team?": "Team Struggle",
+        "What are you looking to get most out of this program?": "Program Goal",
+        "Additional info about your team or wrestlers? (i.e. location, size, competitive level, struggles, etc.)": "Message"
+      },
+      "display_fields": [
+        ["First Name", "First"],
+        ["Last Name", "Last"],
+        ["Email", "Email"],
+        ["Job Title", "Which best describes you"],
+        ["Phone Number", "Cell Phone Number"],
+        ["Age Level Coached", "What age level do you coach"],
+        ["School/Team Name", "School or Team Name"],
+        ["City/State/Country", "City, State, Country"],
+        ["Source", "Where did you hear about Wrestling Mindset?"],
+        ["Team Struggle", "What is the main struggle of your team?"],
+        ["Program Goal", "What are you looking to get most out of this program?"],
+        ["Message", "Additional info about your team or wrestlers"]
+      ]
     }
   ]
 }

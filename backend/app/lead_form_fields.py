@@ -27,6 +27,11 @@ LEAD_FORM_FIELDS: list[tuple[str, str]] = [
     ("Investment Level", "Preferred investment level"),
     ("Club/Team Promo Code", "Club/Team Promo Code"),
     ("Message", "Additional wrestling information"),
+    ("Age Level Coached", "What age level do you coach"),
+    ("School/Team Name", "School or Team Name"),
+    ("City/State/Country", "City, State, Country"),
+    ("Team Struggle", "What is the main struggle of your team?"),
+    ("Program Goal", "What are you looking to get most out of this program?"),
     ("UTM Source", "UTM Source"),
     ("UTM Medium", "UTM Medium"),
     ("UTM Campaign", "UTM Campaign"),
@@ -80,6 +85,12 @@ WUFOO_TITLE_ALIASES: dict[str, str] = {
     "UTM content": "UTM Content",
     "UTM keyword": "UTM Keyword",
     "Club/Team Promo Code": "Club/Team Promo Code",
+    "What age level do you coach (HS, college, youth, RTC, etc.)": "Age Level Coached",
+    "School or Team Name": "School/Team Name",
+    "City, State, Country": "City/State/Country",
+    "What is the main struggle of your team?": "Team Struggle",
+    "What are you looking to get most out of this program?": "Program Goal",
+    "Additional info about your team or wrestlers? (i.e. location, size, competitive level, struggles, etc.)*": "Message",
 }
 
 FORM_LABEL_TO_COLUMN: dict[str, str] = {label: key for key, label in LEAD_FORM_FIELDS}
