@@ -134,8 +134,8 @@
       "webhook_query_form": "form-3",
       "routing": {
         "policy": "fixed_reps",
-        "fixed_rep_ids": ["gene"],
-        "fixed_rep_pick": "first",
+        "fixed_rep_ids": ["gene", "jake"],
+        "fixed_rep_pick": "round_robin",
         "score_with_ai": false,
         "auto_route": true,
         "send_to_n8n": true,

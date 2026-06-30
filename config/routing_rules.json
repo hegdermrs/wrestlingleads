@@ -1,7 +1,7 @@
 {
   "routing_mode": "hybrid",
-  "distribution_gene_pct": 10,
-  "distribution_jake_pct": 20,
+  "distribution_gene_pct": 5,
+  "distribution_jake_pct": 25,
   "distribution_general_pct": 50,
   "distribution_automation_pct": 20,
   "min_leads_for_percentile": 15,
